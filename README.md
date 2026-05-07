@@ -14,7 +14,15 @@ cd gestao-casal
 npm install
 ```
 
-Aplicar o schema no SQLite (cria/atualiza `data/app.db`):
+**Banco SQLite:** na primeira subida do servidor (`npm run dev` ou `npm run start`), o app **cria a pasta do arquivo**, **cria o `.db` se não existir** e aplica as migrações em `drizzle/` automaticamente. Os dados **não são apagados** em novas versões: só entram migrações novas que você adicionar ao projeto.
+
+Para alterar o schema em desenvolvimento, prefira gerar uma migração e commitá-la (preserva o fluxo de produção):
+
+```bash
+npx drizzle-kit generate
+```
+
+O comando abaixo ainda existe para prototipar só no SQLite local sem arquivo de migração (evite depender dele para o que vai para produção):
 
 ```bash
 npm run db:push
@@ -41,7 +49,7 @@ Abra [http://localhost:3000](http://localhost:3000). Você será redirecionado p
 
 ### Variáveis de ambiente (opcional)
 
-- `DATABASE_PATH` — caminho do arquivo SQLite (padrão: `./data/app.db` na raiz do projeto)
+- `DATABASE_PATH` — caminho do arquivo SQLite (padrão: `./data/app.db`). **Use o mesmo caminho em todo deploy** (volume persistente) para os dados não “zerarem” a cada atualização.
 - `NEXT_PUBLIC_APP_URL` — URL pública usada no link de convite na criação de casal (padrão: `http://localhost:3000`)
 
 ## Fluxos principais
@@ -61,8 +69,9 @@ Abra [http://localhost:3000](http://localhost:3000). Você será redirecionado p
 
 | Comando        | Descrição                          |
 |----------------|------------------------------------|
-| `npm run db:push`   | Sincroniza schema (Drizzle) com o SQLite |
-| `npm run db:generate` | Gera arquivos de migration (opcional) |
+| *(automático)* | Ao subir o app, migrações em `drizzle/` criam/atualizam tabelas sem apagar dados |
+| `npm run db:push`   | Sincroniza schema direto no SQLite (só para prototipar localmente) |
+| `npm run db:generate` | Gera novo arquivo SQL em `drizzle/` a partir do `schema.ts` |
 | `npm run db:seed`  | Dados de demo (falha se já existir usuário) |
 | `npm run build`    | Build de produção                 |
 | `npm run start`     | Servidor pós-`build`            |
