@@ -1,0 +1,300 @@
+"use server";
+
+import { and, eq } from "drizzle-orm";
+import { db, schema } from "@/lib/db";
+import { requireAuth } from "@/lib/auth/getCouple";
+import { isChildAccount, responsibleTagForChildUser } from "@/lib/auth/member";
+import { assertResponsibleBelongsToCouple } from "@/lib/data/children";
+import { getCardUsedCents } from "@/lib/services/cardLimit";
+import { parseDateBR } from "@/lib/dates";
+import { parseMoneyToCents } from "@/lib/money";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+
+const expenseForm = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  categoryId: z.string().min(1),
+  amount: z.string().min(1),
+  dueDate: z.string().min(1),
+  paidAt: z.string().optional(),
+  paymentMethod: z.string().min(1),
+  cardId: z.string().optional(),
+  responsible: z.string().min(1),
+  expenseType: z.enum(["fixed", "variable", "installment", "goal"]),
+  status: z.enum(["pending", "paid", "overdue", "cancelled"]),
+  recurrence: z.enum(["none", "weekly", "monthly", "yearly"]),
+  installments: z.coerce.number().int().min(1).max(60).optional(),
+});
+
+function normalizePaidAt(
+  status: string,
+  paid: string | undefined
+): string | null {
+  if (status === "paid" && paid) {
+    return parseDateBR(paid) ?? null;
+  }
+  if (status === "paid" && !paid) {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+export async function createExpenseAction(formData: FormData) {
+  const s = await requireAuth();
+  const r = expenseForm.safeParse({
+    title: formData.get("title"),
+    description: formData.get("description") ?? undefined,
+    categoryId: formData.get("categoryId"),
+    amount: String(formData.get("amount") ?? ""),
+    dueDate: String(formData.get("dueDate") ?? ""),
+    paidAt: formData.get("paidAt") || undefined,
+    paymentMethod: formData.get("paymentMethod"),
+    cardId: (formData.get("cardId") as string) || undefined,
+    responsible: formData.get("responsible"),
+    expenseType: formData.get("expenseType"),
+    status: formData.get("status"),
+    recurrence: formData.get("recurrence") ?? "none",
+    installments: formData.get("installments") || 1,
+  });
+  if (!r.success) return { error: "Dados inválidos" };
+  const d = r.data;
+  const childTag = responsibleTagForChildUser(s.user);
+  let responsible = d.responsible;
+  if (childTag) {
+    responsible = childTag;
+  } else if (!(await assertResponsibleBelongsToCouple(s.user.coupleId, d.responsible))) {
+    return { error: "Responsável inválido" };
+  }
+  const due = parseDateBR(d.dueDate);
+  if (!due) return { error: "Data de vencimento inválida (use DD/MM/AAAA)" };
+  const amountCents = parseMoneyToCents(d.amount);
+  if (amountCents <= 0) return { error: "Informe o valor" };
+
+  if (d.paymentMethod === "credit" && d.cardId) {
+    const [c] = await db
+      .select()
+      .from(schema.cards)
+      .where(
+        and(
+          eq(schema.cards.id, d.cardId),
+          eq(schema.cards.coupleId, s.user.coupleId)
+        )
+      );
+    if (!c) return { error: "Cartão inválido" };
+    const inst = d.expenseType === "installment" && d.installments && d.installments > 1
+      ? d.installments
+      : 1;
+    const per = Math.ceil(amountCents / inst);
+    const used = await getCardUsedCents(s.user.coupleId, d.cardId);
+    if (c.limitTotalCents < used + per) {
+      return { error: "Lançamento ultrapassa o limite disponível do cartão" };
+    }
+  } else if (d.paymentMethod === "credit" && !d.cardId) {
+    return { error: "Selecione o cartão para compra no crédito" };
+  }
+
+  const paidAt = normalizePaidAt(d.status, d.paidAt);
+  const inst =
+    d.expenseType === "installment" && d.installments && d.installments > 1
+      ? d.installments
+      : 1;
+  const group = inst > 1 ? crypto.randomUUID() : null;
+  const [y0, m0, day0] = due.split("-").map(Number);
+  for (let i = 0; i < inst; i++) {
+    const eid = crypto.randomUUID();
+    const next = new Date(y0, m0 - 1 + i, day0);
+    const y = next.getFullYear();
+    const m = String(next.getMonth() + 1).padStart(2, "0");
+    const day = String(next.getDate()).padStart(2, "0");
+    const nextDue = `${y}-${m}-${day}`;
+    const per = Math.ceil(amountCents / inst);
+    const rowAmt = i === inst - 1 ? amountCents - per * (inst - 1) : per;
+    const st = i === 0 ? d.status : "pending";
+    const pAt = i === 0 ? paidAt : null;
+    await db.insert(schema.expenses).values({
+      id: eid,
+      coupleId: s.user.coupleId,
+      title: inst > 1 ? `${d.title} (${i + 1}/${inst})` : d.title,
+      description: d.description ?? null,
+      categoryId: d.categoryId,
+      amountCents: rowAmt,
+      dueDate: nextDue,
+      paidAt: pAt,
+      paymentMethod: d.paymentMethod,
+      cardId: d.cardId ?? null,
+      responsible,
+      expenseType: d.expenseType,
+      status: st,
+      recurrence: d.recurrence,
+      createdByUserId: s.user.id,
+      updatedByUserId: s.user.id,
+      installmentIndex: inst > 1 ? i + 1 : null,
+      installmentTotal: inst > 1 ? inst : null,
+      installmentGroupId: group,
+    });
+  }
+
+  revalidatePath("/despesas");
+  revalidatePath("/");
+  revalidatePath("/cartoes");
+  return { ok: true as const };
+}
+
+export async function updateExpenseAction(id: string, formData: FormData) {
+  const s = await requireAuth();
+  const [prev] = await db
+    .select()
+    .from(schema.expenses)
+    .where(
+      and(
+        eq(schema.expenses.id, id),
+        eq(schema.expenses.coupleId, s.user.coupleId)
+      )
+    );
+  if (!prev) return { error: "Despesa não encontrada" };
+  const childTag = responsibleTagForChildUser(s.user);
+  if (isChildAccount(s.user)) {
+    if (!childTag || prev.responsible !== childTag) {
+      return { error: "Sem permissão" };
+    }
+  }
+  const r = expenseForm.safeParse({
+    title: formData.get("title"),
+    description: formData.get("description") ?? undefined,
+    categoryId: formData.get("categoryId"),
+    amount: String(formData.get("amount") ?? ""),
+    dueDate: String(formData.get("dueDate") ?? ""),
+    paidAt: formData.get("paidAt") || undefined,
+    paymentMethod: formData.get("paymentMethod"),
+    cardId: (formData.get("cardId") as string) || undefined,
+    responsible: formData.get("responsible"),
+    expenseType: formData.get("expenseType"),
+    status: formData.get("status"),
+    recurrence: formData.get("recurrence") ?? "none",
+    installments: 1,
+  });
+  if (!r.success) return { error: "Dados inválidos" };
+  const d = r.data;
+  const responsible = childTag ?? d.responsible;
+  if (!childTag && !(await assertResponsibleBelongsToCouple(s.user.coupleId, d.responsible))) {
+    return { error: "Responsável inválido" };
+  }
+  const due = parseDateBR(d.dueDate);
+  if (!due) return { error: "Data de vencimento inválida" };
+  const amountCents = parseMoneyToCents(d.amount);
+  if (d.paymentMethod === "credit" && d.cardId) {
+    const [c] = await db
+      .select()
+      .from(schema.cards)
+      .where(
+        and(
+          eq(schema.cards.id, d.cardId),
+          eq(schema.cards.coupleId, s.user.coupleId)
+        )
+      );
+    if (!c) return { error: "Cartão inválido" };
+    const used = await getCardUsedCents(s.user.coupleId, d.cardId);
+    const prevOnThis =
+      prev.cardId === d.cardId && prev.status !== "cancelled"
+        ? prev.amountCents
+        : 0;
+    const newCount = d.status !== "cancelled" ? amountCents : 0;
+    const newTotal = used - prevOnThis + newCount;
+    if (c.limitTotalCents < newTotal) {
+      return { error: "Lançamento ultrapassa o limite do cartão" };
+    }
+  } else if (d.paymentMethod === "credit" && !d.cardId) {
+    return { error: "Selecione o cartão" };
+  }
+  const paidAt = normalizePaidAt(d.status, d.paidAt);
+  await db
+    .update(schema.expenses)
+    .set({
+      title: d.title,
+      description: d.description ?? null,
+      categoryId: d.categoryId,
+      amountCents,
+      dueDate: due,
+      paidAt,
+      paymentMethod: d.paymentMethod,
+      cardId: d.cardId ?? null,
+      responsible,
+      expenseType: d.expenseType,
+      status: d.status,
+      recurrence: d.recurrence,
+      updatedByUserId: s.user.id,
+    })
+    .where(eq(schema.expenses.id, id));
+  revalidatePath("/despesas");
+  revalidatePath("/");
+  revalidatePath("/cartoes");
+  redirect("/despesas");
+}
+
+export async function deleteExpenseAction(id: string) {
+  const s = await requireAuth();
+  const [prev] = await db
+    .select()
+    .from(schema.expenses)
+    .where(
+      and(
+        eq(schema.expenses.id, id),
+        eq(schema.expenses.coupleId, s.user.coupleId)
+      )
+    );
+  if (!prev) return { ok: false as const };
+  const childTag = responsibleTagForChildUser(s.user);
+  if (isChildAccount(s.user)) {
+    if (!childTag || prev.responsible !== childTag) {
+      return { ok: false as const };
+    }
+  }
+  await db
+    .delete(schema.expenses)
+    .where(
+      and(
+        eq(schema.expenses.id, id),
+        eq(schema.expenses.coupleId, s.user.coupleId)
+      )
+    );
+  revalidatePath("/despesas");
+  revalidatePath("/");
+  revalidatePath("/cartoes");
+  return { ok: true };
+}
+
+export async function markPaidFormAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await markPaidAction(id);
+}
+
+export async function markPaidAction(id: string) {
+  const s = await requireAuth();
+  const t = new Date();
+  const p = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  const [e] = await db
+    .select()
+    .from(schema.expenses)
+    .where(
+      and(
+        eq(schema.expenses.id, id),
+        eq(schema.expenses.coupleId, s.user.coupleId)
+      )
+    );
+  if (!e) return;
+  const childTag = responsibleTagForChildUser(s.user);
+  if (isChildAccount(s.user)) {
+    if (!childTag || e.responsible !== childTag) return;
+  }
+  await db
+    .update(schema.expenses)
+    .set({ status: "paid", paidAt: p, updatedByUserId: s.user.id })
+    .where(eq(schema.expenses.id, id));
+  revalidatePath("/despesas");
+  revalidatePath("/");
+  revalidatePath("/cartoes");
+}

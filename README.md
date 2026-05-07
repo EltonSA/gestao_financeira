@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Casal + Finanças — MVP SaaS
 
-## Getting Started
+Aplicação **Next.js 15** (App Router) + **TypeScript** + **Tailwind CSS** + **Drizzle ORM** + **SQLite** (`better-sqlite3`) para controle financeiro de casal: cartões, despesas, fixos, metas (cofrinhos), dashboard com gráficos (Recharts), insights e relatórios básicos.
 
-First, run the development server:
+## Requisitos
+
+- Node.js 20+ (recomendado 22 LTS)
+- npm
+
+## Como rodar
+
+```bash
+cd gestao-casal
+npm install
+```
+
+Aplicar o schema no SQLite (cria/atualiza `data/app.db`):
+
+```bash
+npm run db:push
+```
+
+Popular dados de demonstração (um casal, dois usuários, cartões, despesas, metas):
+
+```bash
+npm run db:seed
+```
+
+Subir o servidor de desenvolvimento:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra [http://localhost:3000](http://localhost:3000). Você será redirecionado para o login se não houver sessão.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Credenciais demo (após `db:seed`)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **E-mails:** `elton@exemplo.com` ou `leticia@exemplo.com`
+- **Senha:** `demo123`
 
-## Learn More
+### Variáveis de ambiente (opcional)
 
-To learn more about Next.js, take a look at the following resources:
+- `DATABASE_PATH` — caminho do arquivo SQLite (padrão: `./data/app.db` na raiz do projeto)
+- `NEXT_PUBLIC_APP_URL` — URL pública usada no link de convite na criação de casal (padrão: `http://localhost:3000`)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Fluxos principais
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Criar casal** em `/registro` (primeiro membro) — recebe o link de convite para o segundo.
+2. **Segundo membro** acessa `/registro?token=...` com o token do convite.
+3. **Login** em `/login`.
+4. Área autenticada: dashboard em `/`, despesas, cartões, gastos fixos, cofrinhos, calendário, relatórios, configurações e perfil.
 
-## Deploy on Vercel
+## Limite de cartão
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Despesas com **forma crédito** e **cartão** selecionado abatem o limite enquanto o status for pendente, pago ou vencido (não contabiliza cancelada).
+- O “usado” é a **soma** dos valores no cartão; ao editar ou excluir, o cálculo é refeito.
+- Alertas visuais a partir de **70%, 85% e 95%** do limite.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Banco e scripts
+
+| Comando        | Descrição                          |
+|----------------|------------------------------------|
+| `npm run db:push`   | Sincroniza schema (Drizzle) com o SQLite |
+| `npm run db:generate` | Gera arquivos de migration (opcional) |
+| `npm run db:seed`  | Dados de demo (falha se já existir usuário) |
+| `npm run build`    | Build de produção                 |
+| `npm run start`     | Servidor pós-`build`            |
+
+**Produção:** use um processo Node com **volume persistente** para o arquivo do SQLite, ou evolua para **LibSQL/Turso** no mesmo Drizzle, se for hospedar em ambiente serverless. Variáveis de exemplo: `.env.example`.
+
+## Estrutura (resumo)
+
+- `src/app/(auth)/` — login e registro
+- `src/app/(app)/` — área autenticada (layout com sidebar + navegação mobile)
+- `src/lib/db/` — schema Drizzle e conexão
+- `src/lib/auth/` — sessão em cookie + hash Argon2
+- `src/actions/` — server actions
+- `src/lib/data/stats.ts` — agregações do dashboard
+- `src/lib/insights/engine.ts` — “Resumo inteligente”
+- `scripts/seed.ts` — seed
+- `drizzle.config.ts` — configuração Drizzle Kit (URL `file:...` para o mesmo banco)
+
+## Fora do escopo do MVP
+
+- Open Finance / import de faturas / pagamento automático
+- Múltiplas organizações complexas (a base está em `couples` e `users` para suportar multi-casal no futuro com poucas migrações)
+
+## Licença
+
+Uso do projeto conforme a necessidade do autor do repositório.
