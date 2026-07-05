@@ -83,10 +83,17 @@ npm run db:migrate
 
 ### Deploy em produção
 
-1. Crie o banco PostgreSQL no host (Supabase, Neon, Railway, etc.).
-2. Configure `DATABASE_URL` (e `NEXT_PUBLIC_APP_URL`) nas variáveis de ambiente.
-3. Rode **`npm run db:migrate`** uma vez no banco vazio (CI, release command ou manual).
-4. Faça deploy e acesse `/registro` para criar o casal — ou use `db:seed` só em ambiente de teste.
+1. Crie o banco PostgreSQL no host (Supabase, Neon, Railway, cPanel, etc.).
+2. Configure **`DATABASE_URL`** (e `NEXT_PUBLIC_APP_URL`) nas variáveis de ambiente do host.
+3. Se o Postgres do host **não usa SSL** (comum em cPanel/servidor próprio), adicione `DATABASE_SSL=false`.
+4. Faça deploy — o app **aplica migrações automaticamente** na subida do servidor. Também pode rodar manualmente: `npm run db:migrate`.
+5. Acesse `/registro` para criar o casal (banco começa vazio).
+
+**Erro “Application error” após deploy?** Verifique no painel do host:
+- `DATABASE_URL` está definida e aponta para o banco correto
+- Usuário/senha/host/porta na URL estão certos
+- Migrações rodaram (logs devem mostrar `[db] Migrações aplicadas`)
+- Limpe cookies do site no navegador (sessão antiga do SQLite pode causar comportamento estranho)
 
 ## Estrutura (resumo)
 

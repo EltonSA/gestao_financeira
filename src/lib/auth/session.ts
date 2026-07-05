@@ -10,29 +10,34 @@ const MAX_AGE_DAYS = 30;
 export const getSession = cache(async () => {
   const id = (await cookies()).get(COOKIE)?.value;
   if (!id) return null;
-  const [row] = await db
-    .select()
-    .from(schema.sessions)
-    .where(eq(schema.sessions.id, id))
-    .limit(1);
-  if (!row) return null;
-  if (row.expiresAt < new Date()) {
-    await db.delete(schema.sessions).where(eq(schema.sessions.id, id));
+  try {
+    const [row] = await db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.id, id))
+      .limit(1);
+    if (!row) return null;
+    if (row.expiresAt < new Date()) {
+      await db.delete(schema.sessions).where(eq(schema.sessions.id, id));
+      return null;
+    }
+    const [user] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, row.userId))
+      .limit(1);
+    if (!user) return null;
+    const [couple] = await db
+      .select()
+      .from(schema.couples)
+      .where(eq(schema.couples.id, user.coupleId))
+      .limit(1);
+    if (!couple) return null;
+    return { session: row, user: { ...user, couple } };
+  } catch (err) {
+    console.error("[getSession] Erro ao consultar sessão:", err);
     return null;
   }
-  const [user] = await db
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.id, row.userId))
-    .limit(1);
-  if (!user) return null;
-  const [couple] = await db
-    .select()
-    .from(schema.couples)
-    .where(eq(schema.couples.id, user.coupleId))
-    .limit(1);
-  if (!couple) return null;
-  return { session: row, user: { ...user, couple } };
 });
 
 export type SessionData = NonNullable<Awaited<ReturnType<typeof getSession>>>;

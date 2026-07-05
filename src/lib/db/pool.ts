@@ -4,6 +4,7 @@ function shouldUseSsl(connectionString: string) {
   if (process.env.DATABASE_SSL === "false") return false;
   if (process.env.DATABASE_SSL === "true") return true;
   const lower = connectionString.toLowerCase();
+  if (lower.includes("sslmode=disable") || lower.includes("ssl=0")) return false;
   if (lower.includes("localhost") || lower.includes("127.0.0.1")) return false;
   return true;
 }
