@@ -1,5 +1,6 @@
+import { loadEnvFiles } from "./load-env";
 import { hash } from "@node-rs/argon2";
-import { db, schema } from "../src/lib/db";
+import { db, pool, schema } from "./db";
 import { DEFAULT_CATEGORY_SEED } from "../src/lib/constants";
 
 const opts = {
@@ -224,6 +225,7 @@ async function main() {
 
   console.log("Seed concluído. Login: elton@exemplo.com / leticia@exemplo.com | senha: demo123");
   console.log("Convite 2º usuário (já com casal com 2 membros): o convite de demo está ativo, mas 2 contas já existem.");
+  await pool.end();
   process.exit(0);
 }
 

@@ -35,7 +35,7 @@ export default async function NovoGastoFixoPage() {
   const children = await listChildrenByCouple(s.user.coupleId);
   const childRows = children.map((c) => ({ id: c.id, name: c.name }));
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <Link
           href="/gastos-fixos"

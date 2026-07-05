@@ -226,8 +226,8 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="flex-1 px-4 pt-6 pb-28 lg:px-8 lg:pb-12">
-          <div className="mx-auto w-full max-w-6xl animate-fade-in">{children}</div>
+        <main className="flex-1 px-4 pt-6 pb-28 lg:px-6 xl:px-8 lg:pb-12">
+          <div className="w-full animate-fade-in">{children}</div>
         </main>
 
         {/* Mobile bottom tab bar com FAB central */}

@@ -12,7 +12,7 @@ export default async function PerfilPage() {
   const s = await getSession();
   if (!s) redirect("/login");
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         eyebrow="Conta"
         title="Seu perfil"

@@ -13,7 +13,7 @@ export default async function NovoCartaoPage() {
   if (!s) redirect("/login");
   if (isChildAccount(s.user)) redirect("/cartoes");
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <Link
           href="/cartoes"

@@ -1,4 +1,7 @@
+import { loadEnvFiles } from "./load-env";
 import { runMigrationsIfNeeded } from "../src/lib/db/runMigrations";
+
+loadEnvFiles();
 
 async function main() {
   await runMigrationsIfNeeded();

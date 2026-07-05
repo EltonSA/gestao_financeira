@@ -88,7 +88,7 @@ export default async function ConfigPage({
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         eyebrow="Conta"
         title="Configurações da família"

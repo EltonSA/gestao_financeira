@@ -186,7 +186,7 @@ export function DashboardView(p: DProps) {
         <h1 className="h-display text-[var(--foreground)]">
           {greeting}, <span className="text-[var(--primary)]">{userName.split(" ")[0]}</span>.
         </h1>
-        <p className="text-[15px] text-[var(--foreground-muted)] leading-relaxed max-w-xl">
+        <p className="text-[15px] text-[var(--foreground-muted)] leading-relaxed">
           Panorama do mês, cartões com entradas e crédito, e previsões com base no ritmo de gastos.
         </p>
       </section>
@@ -550,7 +550,7 @@ export function DashboardView(p: DProps) {
               Ver tudo <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {cardItems.slice(0, 4).map((row) => {
               const lvl = cardAlertLevel(row.limit > 0 ? row.percent : 0);
               const tone = lvl === "critical" ? "danger" : lvl === "high" ? "warning" : "primary";

@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gestao-casal-db
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: gestao
+      POSTGRES_PASSWORD: gestao
+      POSTGRES_DB: gestao_casal
+    volumes:
+      - gestao_casal_pg:/var/lib/postgresql/data
+
+volumes:
+  gestao_casal_pg:

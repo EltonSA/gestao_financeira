@@ -17,6 +17,17 @@ npm install
 
 Copie `.env.example` para `.env.local` e configure `DATABASE_URL` com a connection string do Postgres.
 
+**Opção rápida (Docker):** suba um Postgres local e aplique as migrações:
+
+```bash
+npm run db:up
+npm run db:migrate
+```
+
+Isso usa o `docker-compose.yml` na raiz (`gestao` / `gestao` / `gestao_casal` na porta **5434** — evita conflito com Postgres instalado no Windows).
+
+**Sem Docker:** instale PostgreSQL 14+ ou use uma URL gratuita (Neon, Supabase) em `DATABASE_URL` no `.env.local`.
+
 **Primeira vez (banco vazio):** crie todas as tabelas com:
 
 ```bash

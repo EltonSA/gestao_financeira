@@ -25,7 +25,7 @@ export default async function EditarCartaoPage({
   if (!c) notFound();
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <Link
           href="/cartoes"

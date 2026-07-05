@@ -44,7 +44,7 @@ export default async function EditarMetaPage({
   const remaining = Math.max(0, g.targetCents - g.currentCents);
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <Link
           href="/cofrinhos"
