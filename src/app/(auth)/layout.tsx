@@ -2,6 +2,8 @@ import { getSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function AuthLayout({
   children,
 }: { children: React.ReactNode }) {

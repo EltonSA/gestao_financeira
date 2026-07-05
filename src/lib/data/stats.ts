@@ -1,9 +1,11 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getEffectiveStatus } from "@/lib/dates";
-import { endOfMonth, startOfMonth, subDays, subMonths } from "date-fns";
+import { endOfMonth, startOfMonth, subDays, subMonths, addDays } from "date-fns";
 import { getAllCardsUsage } from "@/lib/services/cardLimit";
+import { getCardWalletSummaries } from "@/lib/services/cardWallet";
+import { cardSupportsCredit } from "@/lib/cardKind";
 import { runInsights } from "@/lib/insights/engine";
 
 function ymd(d: Date) {
@@ -42,10 +44,14 @@ export async function getDashboardData(coupleId: string) {
   );
 
   let todayPaid = 0;
+  let todayExpenseAll = 0;
   let day7 = 0;
   for (const e of allEx) {
     if (e.status === "paid" && e.paidAt === tStr) {
       todayPaid += e.amountCents;
+    }
+    if (e.status !== "cancelled" && e.dueDate === tStr) {
+      todayExpenseAll += e.amountCents;
     }
     if (e.status === "paid" && e.paidAt && e.paidAt >= d7s && e.paidAt <= tStr) {
       day7 += e.amountCents;
@@ -90,11 +96,55 @@ export async function getDashboardData(coupleId: string) {
   const topCard = Object.entries(byCard).sort((a, b) => b[1] - a[1])[0];
 
   const cardUsage = await getAllCardsUsage(coupleId);
+  const cardWallets = await getCardWalletSummaries(coupleId);
   const totLimit = cRows
     .filter((c) => c.isActive)
     .reduce((a, c) => a + c.limitTotalCents, 0);
   const totAvail = cardUsage.reduce((a, r) => a + r.available, 0);
   const totUsed = cardUsage.reduce((a, r) => a + r.used, 0);
+
+  const walletAgg = cardWallets.reduce(
+    (a, w) => ({
+      incomeOnCards: a.incomeOnCards + w.incomeOnCardCents,
+      creditUsed: a.creditUsed + w.creditUsedCents,
+      effectiveCreditAvail: a.effectiveCreditAvail + w.effectiveCreditAvailableCents,
+      totalDisponivelCartoes: a.totalDisponivelCartoes + w.totalDisponivelCartaoCents,
+      debitUsedOnCards: a.debitUsedOnCards + w.debitUsedOnCardCents,
+      creditLimitTracked: a.creditLimitTracked + (cardSupportsCredit(w.card.cardKind) ? w.creditLimitCents : 0),
+    }),
+    {
+      incomeOnCards: 0,
+      creditUsed: 0,
+      effectiveCreditAvail: 0,
+      totalDisponivelCartoes: 0,
+      debitUsedOnCards: 0,
+      creditLimitTracked: 0,
+    }
+  );
+
+  const recs = await db
+    .select()
+    .from(schema.recurringExpenses)
+    .where(
+      and(
+        eq(schema.recurringExpenses.coupleId, coupleId),
+        eq(schema.recurringExpenses.isActive, true)
+      )
+    );
+  const fixedMonthlyCents = recs.reduce((s, r) => s + r.amountCents, 0);
+
+  const horizon = ymd(addDays(now, 14));
+  let upcoming14Cents = 0;
+  let upcoming14Count = 0;
+  for (const e of allEx) {
+    if (e.status === "cancelled") continue;
+    if (e.dueDate > tStr && e.dueDate <= horizon) {
+      if (e.status === "pending" || getEffectiveStatus(e.dueDate, e.status) === "overdue") {
+        upcoming14Cents += e.amountCents;
+        upcoming14Count += 1;
+      }
+    }
+  }
 
   const prevTotal = sumP(exPrev);
 
@@ -109,6 +159,12 @@ export async function getDashboardData(coupleId: string) {
   const proj = dom > 0 ? (csum / dom) * lastDay : 0;
   const pendingSum = monthPend.reduce((a, b) => a + b.amountCents, 0);
   const overSum = monthOver.reduce((a, b) => a + b.amountCents, 0);
+
+  const monthTotalAll = sumP(exMonth);
+  const monthVariableApprox = Math.max(0, monthTotalAll - fixedMonthlyCents);
+  const burnRate = dom > 0 ? csum / dom : 0;
+  const projPaidMonthEnd = Math.round(burnRate * lastDay);
+  const projCommitMonthEnd = Math.round((monthTotalAll / Math.max(1, dom)) * lastDay);
 
   const daySeries: { d: string; c: number }[] = [];
   for (let i = 0; i < 7; i++) {
@@ -126,14 +182,28 @@ export async function getDashboardData(coupleId: string) {
   return {
     kpi: {
       today: todayPaid,
+      todayScheduled: todayExpenseAll,
       last7: day7,
       month: sumP(monthPaid),
       monthPending: pendingSum,
       monthOver: overSum,
-      monthTotal: sumP(exMonth),
+      monthTotal: monthTotalAll,
+      monthFixed: fixedMonthlyCents,
+      monthVariableApprox,
     },
     monthComparison: { current: csum, previous: prevTotal },
     cards: { totLimit, totAvail, totUsed, items: cardUsage, top: topCard, cardName },
+    cardWallets,
+    walletAgg,
+    forecast: {
+      daysLeftInMonth: Math.max(0, lastDay - dom),
+      projPaidMonthEnd,
+      projCommitMonthEnd,
+      upcoming14Cents,
+      upcoming14Count,
+      avgDailyPaid: avg,
+      projClassic: proj,
+    },
     categories: { byCat, top: topCat ? { name: catName(topCat[0]), c: topCat[1] } : null, catName },
     persons: { by: byPerson, labels: null as { p1: string; p2: string } | null },
     goals,

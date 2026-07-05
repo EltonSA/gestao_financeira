@@ -23,7 +23,7 @@ export default async function NovoCartaoPage() {
         </Link>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Novo cartão</h1>
         <p className="mt-1.5 text-sm text-[var(--foreground-muted)]">
-          Cadastre um cartão de crédito para acompanhar limite e fechamento automático.
+          Cadastre cartão de crédito, débito ou ambos no mesmo plástico. O limite de fatura vale só para a função crédito.
         </p>
       </div>
 

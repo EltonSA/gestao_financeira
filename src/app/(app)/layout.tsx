@@ -6,6 +6,8 @@ import { isChildAccount } from "@/lib/auth/member";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({
   children,
 }: { children: React.ReactNode }) {

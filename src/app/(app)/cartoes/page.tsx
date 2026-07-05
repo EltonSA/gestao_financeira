@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth/session";
-import { getAllCardsUsage } from "@/lib/services/cardLimit";
+import { getCardWalletSummaries } from "@/lib/services/cardWallet";
+import { cardSupportsCredit } from "@/lib/cardKind";
 import { formatBRL } from "@/lib/money";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -13,10 +14,14 @@ import { WalletCard } from "@/components/cards/wallet-card";
 export default async function CartoesPage() {
   const s = await getSession();
   if (!s) redirect("/login");
-  const rows = await getAllCardsUsage(s.user.coupleId);
-  const totLimit = rows.reduce((acc, r) => acc + r.card.limitTotalCents, 0);
-  const totUsed = rows.reduce((acc, r) => acc + r.used, 0);
-  const totAvail = totLimit - totUsed;
+  const rows = await getCardWalletSummaries(s.user.coupleId);
+  const totLimit = rows.reduce(
+    (acc, r) => acc + (cardSupportsCredit(r.card.cardKind) ? r.creditLimitCents : 0),
+    0
+  );
+  const totUsed = rows.reduce((acc, r) => acc + r.creditUsedCents, 0);
+  const totAvail = rows.reduce((acc, r) => acc + r.effectiveCreditAvailableCents, 0);
+  const totDebitUsed = rows.reduce((acc, r) => acc + r.debitUsedOnCardCents, 0);
   const ownerLabel = (o: string) =>
     o === "shared"
       ? "Compartilhado"
@@ -30,7 +35,7 @@ export default async function CartoesPage() {
       <PageHeader
         eyebrow="Carteira"
         title="Cartões"
-        description="Acompanhe limite, uso e disponibilidade de todos os cartões do casal."
+        description="Crédito (limite e fatura), débito (gastos na função) e entradas vinculadas ao cartão."
         action={
           <Button asChild leftIcon={<Plus className="h-4 w-4" />}>
             <Link href="/cartoes/novo">Novo cartão</Link>
@@ -39,11 +44,12 @@ export default async function CartoesPage() {
       />
 
       {rows.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <SummaryStat label="Cartões" value={String(rows.length).padStart(2, "0")} />
-          <SummaryStat label="Limite total" value={formatBRL(totLimit)} />
-          <SummaryStat label="Total usado" value={formatBRL(totUsed)} tone="warning" />
-          <SummaryStat label="Disponível" value={formatBRL(totAvail)} tone="success" />
+          <SummaryStat label="Limite crédito" value={formatBRL(totLimit)} />
+          <SummaryStat label="Fatura crédito" value={formatBRL(totUsed)} tone="warning" />
+          <SummaryStat label="Disp. crédito" value={formatBRL(totAvail)} tone="success" />
+          <SummaryStat label="Gasto débito" value={formatBRL(totDebitUsed)} />
         </div>
       )}
 
@@ -89,10 +95,14 @@ export default async function CartoesPage() {
                   name={r.card.name}
                   institution={r.card.institution}
                   ownerLabel={ownerLabel(r.card.owner)}
-                  used={r.used}
-                  limit={r.card.limitTotalCents}
-                  available={r.available}
+                  used={r.creditUsedCents}
+                  limit={r.creditLimitCents}
+                  available={r.effectiveCreditAvailableCents}
                   percent={r.percent}
+                  cardKind={r.card.cardKind}
+                  debitUsedCents={r.debitUsedOnCardCents}
+                  incomeOnCardCents={r.incomeOnCardCents}
+                  liquidAfterDebitCents={r.liquidAfterDebitCents}
                 />
               </Link>
               {/* Quick edit chip — visível ao hover */}

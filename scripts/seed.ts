@@ -17,7 +17,7 @@ function ymd() {
 async function main() {
   const [u] = await db.select().from(schema.users).limit(1);
   if (u) {
-    console.log("Banco já possui usuários. Remova data/app.db para re-seed.");
+    console.log("Banco já possui usuários. Esvazie as tabelas ou use outro banco para re-seed.");
     process.exit(0);
   }
 
@@ -92,6 +92,7 @@ async function main() {
       name: "Nubank Roxo",
       institution: "nubank",
       owner: "shared",
+      cardKind: "credit" as const,
       limitTotalCents: 5000_00,
       closingDay: 10,
       dueDay: 17,
@@ -106,6 +107,7 @@ async function main() {
       name: "C6",
       institution: "c6",
       owner: "person1",
+      cardKind: "both" as const,
       limitTotalCents: 10_000_00,
       closingDay: 5,
       dueDay: 12,

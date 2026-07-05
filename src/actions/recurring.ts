@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { parseMoneyToCents } from "@/lib/money";
+import { validateExpenseCardSelection } from "@/lib/expenseCardGuard";
 
 const rSchema = z.object({
   name: z.string().min(1),
@@ -42,9 +43,12 @@ export async function createRecurringAction(formData: FormData) {
   }
   const amountCents = parseMoneyToCents(d.amount);
   if (amountCents <= 0) redirect("/gastos-fixos/novo?err=2");
-  if (d.paymentMethod === "credit" && !d.cardId) {
-    redirect("/gastos-fixos/novo?err=3");
-  }
+  const cardErr = await validateExpenseCardSelection(
+    s.user.coupleId,
+    d.paymentMethod,
+    d.cardId
+  );
+  if (cardErr) redirect("/gastos-fixos/novo?err=3");
   await db.insert(schema.recurringExpenses).values({
     coupleId: s.user.coupleId,
     name: d.name,
@@ -117,9 +121,12 @@ export async function updateRecurringAction(id: string, formData: FormData) {
   }
   const amountCents = parseMoneyToCents(d.amount);
   if (amountCents <= 0) return { error: "Valor inválido" };
-  if (d.paymentMethod === "credit" && !d.cardId) {
-    return { error: "Cartão obrigatório para crédito" };
-  }
+  const cardErrU = await validateExpenseCardSelection(
+    s.user.coupleId,
+    d.paymentMethod,
+    d.cardId
+  );
+  if (cardErrU) return { error: cardErrU };
   const [rec] = await db
     .select()
     .from(schema.recurringExpenses)

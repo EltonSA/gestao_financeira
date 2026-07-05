@@ -1,11 +1,12 @@
 # Casal + Finanças — MVP SaaS
 
-Aplicação **Next.js 15** (App Router) + **TypeScript** + **Tailwind CSS** + **Drizzle ORM** + **SQLite** (`better-sqlite3`) para controle financeiro de casal: cartões, despesas, fixos, metas (cofrinhos), dashboard com gráficos (Recharts), insights e relatórios básicos.
+Aplicação **Next.js 15** (App Router) + **TypeScript** + **Tailwind CSS** + **Drizzle ORM** + **PostgreSQL** para controle financeiro de casal: cartões, despesas, entradas, fixos, metas (cofrinhos), dashboard com gráficos (Recharts), insights e relatórios básicos.
 
 ## Requisitos
 
 - Node.js 20+ (recomendado 22 LTS)
 - npm
+- PostgreSQL 14+ (local, Supabase, Neon, Railway, etc.)
 
 ## Como rodar
 
@@ -14,18 +15,12 @@ cd gestao-casal
 npm install
 ```
 
-**Banco SQLite:** na primeira subida do servidor (`npm run dev` ou `npm run start`), o app **cria a pasta do arquivo**, **cria o `.db` se não existir** e aplica as migrações em `drizzle/` automaticamente. Os dados **não são apagados** em novas versões: só entram migrações novas que você adicionar ao projeto.
+Copie `.env.example` para `.env.local` e configure `DATABASE_URL` com a connection string do Postgres.
 
-Para alterar o schema em desenvolvimento, prefira gerar uma migração e commitá-la (preserva o fluxo de produção):
-
-```bash
-npx drizzle-kit generate
-```
-
-O comando abaixo ainda existe para prototipar só no SQLite local sem arquivo de migração (evite depender dele para o que vai para produção):
+**Primeira vez (banco vazio):** crie todas as tabelas com:
 
 ```bash
-npm run db:push
+npm run db:migrate
 ```
 
 Popular dados de demonstração (um casal, dois usuários, cartões, despesas, metas):
@@ -47,17 +42,27 @@ Abra [http://localhost:3000](http://localhost:3000). Você será redirecionado p
 - **E-mails:** `elton@exemplo.com` ou `leticia@exemplo.com`
 - **Senha:** `demo123`
 
-### Variáveis de ambiente (opcional)
+### Variáveis de ambiente
 
-- `DATABASE_PATH` — caminho do arquivo SQLite (padrão: `./data/app.db`). **Use o mesmo caminho em todo deploy** (volume persistente) para os dados não “zerarem” a cada atualização.
-- `NEXT_PUBLIC_APP_URL` — URL pública usada no link de convite na criação de casal (padrão: `http://localhost:3000`)
+| Variável | Descrição |
+|----------|-----------|
+| `DATABASE_URL` | **Obrigatória.** Connection string PostgreSQL (`postgresql://user:pass@host:5432/db`) |
+| `DATABASE_SSL` | `true` / `false` — SSL na conexão (padrão: `true` fora de localhost) |
+| `NEXT_PUBLIC_APP_URL` | URL pública para links de convite (padrão: `http://localhost:3000`) |
+
+Para alterar o schema, gere uma nova migração e aplique em produção:
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
 
 ## Fluxos principais
 
 1. **Criar casal** em `/registro` (primeiro membro) — recebe o link de convite para o segundo.
 2. **Segundo membro** acessa `/registro?token=...` com o token do convite.
 3. **Login** em `/login`.
-4. Área autenticada: dashboard em `/`, despesas, cartões, gastos fixos, cofrinhos, calendário, relatórios, configurações e perfil.
+4. Área autenticada: dashboard em `/`, despesas, entradas, cartões, gastos fixos, cofrinhos, calendário, relatórios, configurações e perfil.
 
 ## Limite de cartão
 
@@ -67,28 +72,34 @@ Abra [http://localhost:3000](http://localhost:3000). Você será redirecionado p
 
 ## Banco e scripts
 
-| Comando        | Descrição                          |
-|----------------|------------------------------------|
-| *(automático)* | Ao subir o app, migrações em `drizzle/` criam/atualizam tabelas sem apagar dados |
-| `npm run db:push`   | Sincroniza schema direto no SQLite (só para prototipar localmente) |
+| Comando | Descrição |
+|---------|-----------|
+| `npm run db:migrate` | Aplica migrações SQL em `drizzle/` no Postgres configurado em `DATABASE_URL` |
 | `npm run db:generate` | Gera novo arquivo SQL em `drizzle/` a partir do `schema.ts` |
-| `npm run db:seed`  | Dados de demo (falha se já existir usuário) |
-| `npm run build`    | Build de produção                 |
-| `npm run start`     | Servidor pós-`build`            |
+| `npm run db:push` | Sincroniza schema direto no banco (prototipar; prefira migrate em produção) |
+| `npm run db:seed` | Dados de demo (ignora se já existir usuário) |
+| `npm run build` | Build de produção |
+| `npm run start` | Servidor pós-`build` |
 
-**Produção:** use um processo Node com **volume persistente** para o arquivo do SQLite, ou evolua para **LibSQL/Turso** no mesmo Drizzle, se for hospedar em ambiente serverless. Variáveis de exemplo: `.env.example`.
+### Deploy em produção
+
+1. Crie o banco PostgreSQL no host (Supabase, Neon, Railway, etc.).
+2. Configure `DATABASE_URL` (e `NEXT_PUBLIC_APP_URL`) nas variáveis de ambiente.
+3. Rode **`npm run db:migrate`** uma vez no banco vazio (CI, release command ou manual).
+4. Faça deploy e acesse `/registro` para criar o casal — ou use `db:seed` só em ambiente de teste.
 
 ## Estrutura (resumo)
 
 - `src/app/(auth)/` — login e registro
 - `src/app/(app)/` — área autenticada (layout com sidebar + navegação mobile)
-- `src/lib/db/` — schema Drizzle e conexão
+- `src/lib/db/` — schema Drizzle e conexão Postgres
 - `src/lib/auth/` — sessão em cookie + hash Argon2
 - `src/actions/` — server actions
 - `src/lib/data/stats.ts` — agregações do dashboard
 - `src/lib/insights/engine.ts` — “Resumo inteligente”
+- `scripts/migrate.ts` — aplica migrações
 - `scripts/seed.ts` — seed
-- `drizzle.config.ts` — configuração Drizzle Kit (URL `file:...` para o mesmo banco)
+- `drizzle.config.ts` — configuração Drizzle Kit
 
 ## Fora do escopo do MVP
 

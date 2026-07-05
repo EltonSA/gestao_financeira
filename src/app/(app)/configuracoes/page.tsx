@@ -10,6 +10,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { InviteCard } from "@/components/settings/invite-card";
+import { ChangePasswordDialog } from "@/components/settings/change-password-dialog";
+import { RemoveMemberButton } from "@/components/settings/remove-member-button";
 import { addChildAction, createChildInviteAction, deleteChildAction, updateChildNameAction } from "@/actions/children";
 import { listChildrenByCouple, listChildAccountsByCouple } from "@/lib/data/children";
 import { isChildAccount } from "@/lib/auth/member";
@@ -273,28 +275,43 @@ export default async function ConfigPage({
               return (
                 <div
                   key={m.id}
-                  className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3"
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3"
                 >
-                  <Avatar name={m.name} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{m.name}</p>
-                      {isYou && (
-                        <Badge variant="primary" className="text-[10px]">
-                          Você
-                        </Badge>
-                      )}
-                      {m.role === "person1" && !m.linkedChildId && (
-                        <Badge variant="neutral" className="text-[10px]">
-                          Criou o casal
-                        </Badge>
-                      )}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <Avatar name={m.name} size="md" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{m.name}</p>
+                        {isYou && (
+                          <Badge variant="primary" className="text-[10px]">
+                            Você
+                          </Badge>
+                        )}
+                        {m.role === "person1" && !m.linkedChildId && (
+                          <Badge variant="neutral" className="text-[10px]">
+                            Criou o casal
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-[var(--foreground-muted)] truncate">
+                        {m.email}
+                      </p>
                     </div>
-                    <p className="text-xs text-[var(--foreground-muted)] truncate">
-                      {m.email}
-                    </p>
+                    {!isYou && (
+                      <CheckCircle2 className="h-4 w-4 text-[var(--success)] shrink-0 hidden sm:block" />
+                    )}
                   </div>
-                  <CheckCircle2 className="h-4 w-4 text-[var(--success)] shrink-0" />
+                  {isYou ? (
+                    <div className="flex items-center gap-2 sm:shrink-0 pl-12 sm:pl-0">
+                      <ChangePasswordDialog />
+                      <CheckCircle2 className="h-4 w-4 text-[var(--success)] shrink-0" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 sm:shrink-0 pl-12 sm:pl-0">
+                      <RemoveMemberButton userId={m.id} memberName={m.name} variant="adult" />
+                      <CheckCircle2 className="h-4 w-4 text-[var(--success)] shrink-0" />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -304,26 +321,31 @@ export default async function ConfigPage({
               return (
                 <div
                   key={m.id}
-                  className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3"
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3"
                 >
-                  <Avatar name={m.name} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium truncate">{m.name}</p>
-                      {isYou && (
-                        <Badge variant="primary" className="text-[10px]">
-                          Você
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <Avatar name={m.name} size="md" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">{m.name}</p>
+                        {isYou && (
+                          <Badge variant="primary" className="text-[10px]">
+                            Você
+                          </Badge>
+                        )}
+                        <Badge variant="neutral" className="text-[10px]">
+                          Filho(a)
                         </Badge>
-                      )}
-                      <Badge variant="neutral" className="text-[10px]">
-                        Filho(a)
-                      </Badge>
+                      </div>
+                      <p className="text-xs text-[var(--foreground-muted)] truncate">
+                        {m.email}
+                      </p>
                     </div>
-                    <p className="text-xs text-[var(--foreground-muted)] truncate">
-                      {m.email}
-                    </p>
                   </div>
-                  <CheckCircle2 className="h-4 w-4 text-[var(--success)] shrink-0" />
+                  <div className="flex items-center gap-2 sm:shrink-0 pl-12 sm:pl-0">
+                    <RemoveMemberButton userId={m.id} memberName={m.name} variant="child" />
+                    <CheckCircle2 className="h-4 w-4 text-[var(--success)] shrink-0" />
+                  </div>
                 </div>
               );
             })}

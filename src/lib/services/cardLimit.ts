@@ -18,6 +18,7 @@ export async function getCardUsedCents(
       and(
         eq(schema.expenses.coupleId, coupleId),
         eq(schema.expenses.cardId, cardId),
+        eq(schema.expenses.paymentMethod, "credit"),
         inArray(schema.expenses.status, [...ACTIVE] as unknown as string[])
       )
     );

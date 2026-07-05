@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/getCouple";
 import { requireAdultAuth } from "@/lib/auth/member";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -38,6 +39,49 @@ export async function updateCoupleAction(formData: FormData) {
 const prof = z.object({
   name: z.string().min(2),
 });
+
+const passwordChange = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+  confirmPassword: z.string().min(6),
+});
+
+export async function changePasswordAction(formData: FormData) {
+  const s = await requireAuth();
+  const r = passwordChange.safeParse({
+    currentPassword: formData.get("currentPassword"),
+    newPassword: formData.get("newPassword"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+  if (!r.success) return { error: "Preencha todos os campos corretamente" };
+  const d = r.data;
+  if (d.newPassword !== d.confirmPassword) {
+    return { error: "A confirmação não coincide com a nova senha" };
+  }
+  if (d.currentPassword === d.newPassword) {
+    return { error: "A nova senha deve ser diferente da atual" };
+  }
+
+  const [user] = await db
+    .select({ passwordHash: schema.users.passwordHash })
+    .from(schema.users)
+    .where(eq(schema.users.id, s.user.id))
+    .limit(1);
+  if (!user) return { error: "Usuário não encontrado" };
+
+  const valid = await verifyPassword(user.passwordHash, d.currentPassword);
+  if (!valid) return { error: "Senha atual incorreta" };
+
+  const passwordHash = await hashPassword(d.newPassword);
+  await db
+    .update(schema.users)
+    .set({ passwordHash })
+    .where(eq(schema.users.id, s.user.id));
+
+  revalidatePath("/configuracoes");
+  revalidatePath("/perfil");
+  return { ok: true as const };
+}
 
 export async function updateProfileAction(formData: FormData) {
   const s = await requireAuth();
@@ -88,4 +132,33 @@ export async function regenerateInviteAction() {
 
   revalidatePath("/configuracoes");
   redirect("/configuracoes?invite=ok");
+}
+
+export async function removeMemberAction(userId: string) {
+  const s = await requireAdultAuth();
+  if (!userId) return { error: "Membro inválido" };
+  if (userId === s.user.id) {
+    return { error: "Você não pode remover a si mesmo" };
+  }
+
+  const [target] = await db
+    .select({
+      id: schema.users.id,
+      linkedChildId: schema.users.linkedChildId,
+    })
+    .from(schema.users)
+    .where(
+      and(
+        eq(schema.users.id, userId),
+        eq(schema.users.coupleId, s.user.coupleId)
+      )
+    )
+    .limit(1);
+  if (!target) return { error: "Membro não encontrado" };
+
+  await db.delete(schema.users).where(eq(schema.users.id, userId));
+
+  revalidatePath("/configuracoes");
+  revalidatePath("/");
+  return { ok: true as const, wasChild: Boolean(target.linkedChildId) };
 }

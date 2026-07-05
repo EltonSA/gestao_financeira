@@ -42,6 +42,7 @@ export default async function EditarCartaoPage({
           name: c.name,
           institution: c.institution,
           owner: c.owner,
+          cardKind: c.cardKind ?? "credit",
           limitBRL: brFromCents(c.limitTotalCents),
           closingDay: String(c.closingDay),
           dueDay: String(c.dueDay),

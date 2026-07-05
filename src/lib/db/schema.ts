@@ -1,19 +1,27 @@
 import { relations } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const couples = sqliteTable("couples", {
+const ts = () =>
+  timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .$defaultFn(() => new Date());
+
+const tsUpdated = () =>
+  timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .$defaultFn(() => new Date());
+
+export const couples = pgTable("couples", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   person1Label: text("person1_label").notNull().default("Pessoa 1"),
   person2Label: text("person2_label").notNull().default("Pessoa 2"),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
+  createdAt: ts(),
 });
 
-export const users = sqliteTable(
+export const users = pgTable(
   "users",
   {
     id: text("id")
@@ -28,9 +36,7 @@ export const users = sqliteTable(
     roleInCouple: text("role_in_couple").notNull(),
     /** Quando preenchido, usuário é conta de filho(a) vinculada a `couple_children`. */
     linkedChildId: text("linked_child_id"),
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
+    createdAt: ts(),
   },
   (t) => [
     index("users_couple_idx").on(t.coupleId),
@@ -38,15 +44,15 @@ export const users = sqliteTable(
   ]
 );
 
-export const sessions = sqliteTable("sessions", {
+export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
-export const coupleInvites = sqliteTable("couple_invites", {
+export const coupleInvites = pgTable("couple_invites", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -54,12 +60,12 @@ export const coupleInvites = sqliteTable("couple_invites", {
     .notNull()
     .references(() => couples.id, { onDelete: "cascade" }),
   token: text("token").notNull().unique(),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  usedAt: integer("used_at", { mode: "timestamp" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
 });
 
 /** Filhos do casal; responsável nas despesas usa `child:` + id. Conta de login opcional via convite. */
-export const coupleChildren = sqliteTable(
+export const coupleChildren = pgTable(
   "couple_children",
   {
     id: text("id")
@@ -70,15 +76,13 @@ export const coupleChildren = sqliteTable(
       .references(() => couples.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
+    createdAt: ts(),
   },
   (t) => [index("couple_children_couple_idx").on(t.coupleId)]
 );
 
 /** Convite para o filho criar e-mail + senha (um token por cadastro). */
-export const childInvites = sqliteTable(
+export const childInvites = pgTable(
   "child_invites",
   {
     id: text("id")
@@ -91,8 +95,8 @@ export const childInvites = sqliteTable(
       .notNull()
       .references(() => coupleChildren.id, { onDelete: "cascade" }),
     token: text("token").notNull().unique(),
-    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-    usedAt: integer("used_at", { mode: "timestamp" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
   },
   (t) => [
     index("child_invites_couple_idx").on(t.coupleId),
@@ -100,7 +104,7 @@ export const childInvites = sqliteTable(
   ]
 );
 
-export const cards = sqliteTable(
+export const cards = pgTable(
   "cards",
   {
     id: text("id")
@@ -115,31 +119,29 @@ export const cards = sqliteTable(
     limitTotalCents: integer("limit_total_cents").notNull(),
     closingDay: integer("closing_day").notNull(),
     dueDay: integer("due_day").notNull(),
+    /** credit | debit | both — define quais lançamentos podem usar o cartão. */
+    cardKind: text("card_kind").notNull().default("credit"),
     color: text("color").notNull().default("#6366f1"),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    isActive: boolean("is_active").notNull().default(true),
     createdByUserId: text("created_by_user_id").references(() => users.id),
     updatedByUserId: text("updated_by_user_id").references(() => users.id),
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
+    createdAt: ts(),
+    updatedAt: tsUpdated(),
   },
   (t) => [index("cards_couple_idx").on(t.coupleId)]
 );
 
-export const categories = sqliteTable("categories", {
+export const categories = pgTable("categories", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   coupleId: text("couple_id").references(() => couples.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
-  isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
+  isSystem: boolean("is_system").notNull().default(false),
 });
 
-export const recurringExpenses = sqliteTable(
+export const recurringExpenses = pgTable(
   "recurring_expenses",
   {
     id: text("id")
@@ -157,19 +159,17 @@ export const recurringExpenses = sqliteTable(
     paymentMethod: text("payment_method").notNull(),
     cardId: text("card_id").references(() => cards.id, { onDelete: "set null" }),
     responsible: text("responsible").notNull(),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    isActive: boolean("is_active").notNull().default(true),
     lastGeneratedYearMonth: text("last_generated_year_month"),
     createdByUserId: text("created_by_user_id")
       .notNull()
       .references(() => users.id),
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
+    createdAt: ts(),
   },
   (t) => [index("recurring_couple_idx").on(t.coupleId)]
 );
 
-export const expenses = sqliteTable(
+export const expenses = pgTable(
   "expenses",
   {
     id: text("id")
@@ -203,17 +203,38 @@ export const expenses = sqliteTable(
       .notNull()
       .references(() => users.id),
     updatedByUserId: text("updated_by_user_id").references(() => users.id),
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
+    createdAt: ts(),
+    updatedAt: tsUpdated(),
   },
   (t) => [index("expenses_couple_due_idx").on(t.coupleId, t.dueDate)]
 );
 
-export const goals = sqliteTable(
+export const incomes = pgTable(
+  "incomes",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    coupleId: text("couple_id")
+      .notNull()
+      .references(() => couples.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    amountCents: integer("amount_cents").notNull(),
+    receivedDate: text("received_date").notNull(),
+    cardId: text("card_id").references(() => cards.id, { onDelete: "set null" }),
+    responsible: text("responsible").notNull(),
+    createdByUserId: text("created_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    updatedByUserId: text("updated_by_user_id").references(() => users.id),
+    createdAt: ts(),
+    updatedAt: tsUpdated(),
+  },
+  (t) => [index("incomes_couple_received_idx").on(t.coupleId, t.receivedDate)]
+);
+
+export const goals = pgTable(
   "goals",
   {
     id: text("id")
@@ -232,14 +253,12 @@ export const goals = sqliteTable(
     createdByUserId: text("created_by_user_id")
       .notNull()
       .references(() => users.id),
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
+    createdAt: ts(),
   },
   (t) => [index("goals_couple_idx").on(t.coupleId)]
 );
 
-export const goalContributions = sqliteTable("goal_contributions", {
+export const goalContributions = pgTable("goal_contributions", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -252,9 +271,7 @@ export const goalContributions = sqliteTable("goal_contributions", {
   createdByUserId: text("created_by_user_id")
     .notNull()
     .references(() => users.id),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
+  createdAt: ts(),
 });
 
 /* Relations (optional, for query helpers) */
@@ -274,5 +291,6 @@ export type Card = typeof cards.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type RecurringExpense = typeof recurringExpenses.$inferSelect;
+export type Income = typeof incomes.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type CoupleChild = typeof coupleChildren.$inferSelect;

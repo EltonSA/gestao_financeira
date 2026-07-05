@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db";
 import { getEffectiveStatus } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getAllCardsUsage } from "@/lib/services/cardLimit";
+import { cardSupportsCredit } from "@/lib/cardKind";
 import { endOfMonth, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
 
 export type Insight = {
@@ -159,6 +160,12 @@ export async function runInsights(coupleId: string): Promise<Insight[]> {
 
   const cardsU = await getAllCardsUsage(coupleId);
   for (const row of cardsU) {
+    if (
+      !cardSupportsCredit(row.card.cardKind) ||
+      row.card.limitTotalCents <= 0
+    ) {
+      continue;
+    }
     if (row.level !== "ok") {
       out.push({
         id: id(`card-${row.card.id}`),

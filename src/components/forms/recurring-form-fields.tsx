@@ -1,12 +1,14 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Field, Input, Select } from "@/components/ui/input";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import { childResponsibleValue } from "@/lib/responsible";
+import { cardSupportsCredit, cardSupportsDebit } from "@/lib/cardKind";
 
 export type RecurringFormCtx = {
   cats: { id: string; name: string }[];
-  cards: { id: string; name: string }[];
+  cards: { id: string; name: string; cardKind: string }[];
   p1: string;
   p2: string;
   children: { id: string; name: string }[];
@@ -29,8 +31,31 @@ export function RecurringFormFields({
   defaults,
 }: { ctx: RecurringFormCtx; defaults?: RecurringFormDefaults }) {
   const d = defaults ?? {};
+  const creditCards = useMemo(
+    () => ctx.cards.filter((c) => cardSupportsCredit(c.cardKind)),
+    [ctx.cards]
+  );
+  const debitCards = useMemo(
+    () => ctx.cards.filter((c) => cardSupportsDebit(c.cardKind)),
+    [ctx.cards]
+  );
+  const [pm, setPm] = useState(d.paymentMethod ?? "pix");
+  const [cardId, setCardId] = useState(d.cardId ?? "");
+
+  useEffect(() => {
+    const pool =
+      pm === "credit" ? creditCards : pm === "debit" ? debitCards : [];
+    if (cardId && !pool.some((c) => c.id === cardId)) setCardId("");
+    if (pm !== "credit" && pm !== "debit") setCardId("");
+  }, [pm, creditCards, debitCards, cardId]);
+
+  const cardPool = pm === "credit" ? creditCards : pm === "debit" ? debitCards : [];
+  const showCardRow = pm === "credit" || pm === "debit";
+
   return (
     <div className="space-y-5">
+      <input type="hidden" name="paymentMethod" value={pm} />
+      <input type="hidden" name="cardId" value={cardId} />
       <Field label="Nome">
         <Input name="name" required placeholder="Ex.: Aluguel" defaultValue={d.name} />
       </Field>
@@ -65,7 +90,7 @@ export function RecurringFormFields({
           </Select>
         </Field>
         <Field label="Forma de pagamento">
-          <Select name="paymentMethod" required defaultValue={d.paymentMethod ?? "pix"}>
+          <Select required value={pm} onChange={(e) => setPm(e.target.value)}>
             {PAYMENT_METHODS.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
@@ -73,14 +98,29 @@ export function RecurringFormFields({
         </Field>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Cartão" hint="Se forma for crédito">
-          <Select name="cardId" defaultValue={d.cardId ?? ""}>
-            <option value="">—</option>
-            {ctx.cards.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </Select>
-        </Field>
+        {showCardRow ? (
+          <Field
+            label="Cartão"
+            hint={
+              pm === "credit"
+                ? "Obrigatório para crédito."
+                : "Opcional no débito."
+            }
+          >
+            <Select
+              required={pm === "credit"}
+              value={cardId}
+              onChange={(e) => setCardId(e.target.value)}
+            >
+              <option value="">{pm === "credit" ? "Selecione…" : "—"}</option>
+              {cardPool.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          </Field>
+        ) : (
+          <div aria-hidden className="hidden sm:block" />
+        )}
         <Field label="Responsável">
           {ctx.lockedResponsible && ctx.lockedResponsibleLabel ? (
             <>

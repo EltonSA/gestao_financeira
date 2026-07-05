@@ -1,29 +1,27 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import "server-only";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
-import path from "path";
-import fs from "fs";
-import { runSqliteMigrations } from "./migrate";
+import { getPgPool } from "./pool";
 
-const defaultPath = path.join(process.cwd(), "data", "app.db");
-const databasePath = process.env.DATABASE_PATH ?? defaultPath;
+type Db = NodePgDatabase<typeof schema>;
 
-const dir = path.dirname(databasePath);
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir, { recursive: true });
+let client: Db | undefined;
+
+function dbInstance(): Db {
+  if (!client) client = drizzle(getPgPool(), { schema });
+  return client;
 }
 
-const sqlite = new Database(databasePath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+/** Conexão lazy — só abre o pool na primeira query (permite build sem DATABASE_URL). */
+export const db: Db = new Proxy({} as Db, {
+  get(_target, prop, receiver) {
+    const instance = dbInstance();
+    const value = Reflect.get(instance as object, prop, receiver);
+    if (typeof value === "function") {
+      return (value as (...args: unknown[]) => unknown).bind(instance);
+    }
+    return value;
+  },
+});
 
-const migrationsFolder = path.join(process.cwd(), "drizzle");
-if (!fs.existsSync(path.join(migrationsFolder, "meta", "_journal.json"))) {
-  throw new Error(
-    'Migrações em "drizzle/" não encontradas (meta/_journal.json). Sem isso o banco não pode ser criado automaticamente.'
-  );
-}
-
-export const db = drizzle(sqlite, { schema });
-runSqliteMigrations(sqlite, db, migrationsFolder);
 export { schema };

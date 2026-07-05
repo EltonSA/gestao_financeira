@@ -77,7 +77,11 @@ export default async function EditarGastoFixoPage({
         }}
         ctx={{
           cats: cats.map((c) => ({ id: c.id, name: c.name })),
-          cards: cards.map((c) => ({ id: c.id, name: c.name })),
+          cards: cards.map((c) => ({
+            id: c.id,
+            name: c.name,
+            cardKind: c.cardKind ?? "credit",
+          })),
           p1: s.user.couple.person1Label,
           p2: s.user.couple.person2Label,
           children: childRows,

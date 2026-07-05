@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { CalendarDays, DollarSign, Tag } from "lucide-react";
 import { childResponsibleValue } from "@/lib/responsible";
+import { cardSupportsCredit, cardSupportsDebit } from "@/lib/cardKind";
 
 const PM = [
   { value: "cash", label: "Dinheiro" },
@@ -21,7 +23,7 @@ const INS: Record<string, string> = {
 
 export type ExpenseFormCtx = {
   cats: { id: string; name: string }[];
-  cards: { id: string; name: string; institution: string }[];
+  cards: { id: string; name: string; institution: string; cardKind: string }[];
   p1: string;
   p2: string;
   children: { id: string; name: string }[];
@@ -67,6 +69,27 @@ export function ExpenseFormFields({
   defaults,
 }: { ctx: ExpenseFormCtx; defaults?: ExpenseFormDefaults }) {
   const d = defaults ?? {};
+  const creditCards = useMemo(
+    () => ctx.cards.filter((c) => cardSupportsCredit(c.cardKind)),
+    [ctx.cards]
+  );
+  const debitCards = useMemo(
+    () => ctx.cards.filter((c) => cardSupportsDebit(c.cardKind)),
+    [ctx.cards]
+  );
+  const [pm, setPm] = useState(d.paymentMethod ?? "credit");
+  const [cardId, setCardId] = useState(d.cardId ?? "");
+
+  useEffect(() => {
+    const pool =
+      pm === "credit" ? creditCards : pm === "debit" ? debitCards : [];
+    if (cardId && !pool.some((c) => c.id === cardId)) setCardId("");
+    if (pm !== "credit" && pm !== "debit") setCardId("");
+  }, [pm, creditCards, debitCards, cardId]);
+
+  const cardPool = pm === "credit" ? creditCards : pm === "debit" ? debitCards : [];
+  const showCardRow = pm === "credit" || pm === "debit";
+
   return (
     <div className="space-y-7">
       <Section title="Informações" description="Sobre o que é a despesa">
@@ -123,6 +146,8 @@ export function ExpenseFormFields({
       </Section>
 
       <Section title="Pagamento" description="Valor, vencimento e forma">
+        <input type="hidden" name="paymentMethod" value={pm} />
+        <input type="hidden" name="cardId" value={cardId} />
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Valor (R$)">
             <Input
@@ -146,22 +171,41 @@ export function ExpenseFormFields({
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Forma de pagamento">
-            <Select name="paymentMethod" required defaultValue={d.paymentMethod ?? "credit"}>
+            <Select
+              required
+              value={pm}
+              onChange={(e) => setPm(e.target.value)}
+            >
               {PM.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
             </Select>
           </Field>
-          <Field label="Cartão" hint="Apenas se forma for crédito">
-            <Select name="cardId" defaultValue={d.cardId ?? ""}>
-              <option value="">—</option>
-              {ctx.cards.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({INS[c.institution] ?? c.institution})
-                </option>
-              ))}
-            </Select>
-          </Field>
+          {showCardRow ? (
+            <Field
+              label="Cartão"
+              hint={
+                pm === "credit"
+                  ? "Obrigatório para crédito (cartões com função crédito)."
+                  : "Opcional: escolha o cartão no débito, se quiser rastrear."
+              }
+            >
+              <Select
+                required={pm === "credit"}
+                value={cardId}
+                onChange={(e) => setCardId(e.target.value)}
+              >
+                <option value="">{pm === "credit" ? "Selecione…" : "—"}</option>
+                {cardPool.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({INS[c.institution] ?? c.institution})
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : (
+            <div aria-hidden className="hidden sm:block" />
+          )}
         </div>
         <Field label="Data de pagamento" hint="Preencha se já foi pago">
           <Input name="paidAt" placeholder="DD/MM/AAAA (opcional)" defaultValue={d.paidAt} />

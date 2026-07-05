@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/getCouple";
 import { isChildAccount, responsibleTagForChildUser } from "@/lib/auth/member";
 import { assertResponsibleBelongsToCouple } from "@/lib/data/children";
 import { getCardUsedCents } from "@/lib/services/cardLimit";
+import { validateExpenseCardSelection } from "@/lib/expenseCardGuard";
 import { parseDateBR } from "@/lib/dates";
 import { parseMoneyToCents } from "@/lib/money";
 import { revalidatePath } from "next/cache";
@@ -73,6 +74,13 @@ export async function createExpenseAction(formData: FormData) {
   const amountCents = parseMoneyToCents(d.amount);
   if (amountCents <= 0) return { error: "Informe o valor" };
 
+  const cardErr = await validateExpenseCardSelection(
+    s.user.coupleId,
+    d.paymentMethod,
+    d.cardId
+  );
+  if (cardErr) return { error: cardErr };
+
   if (d.paymentMethod === "credit" && d.cardId) {
     const [c] = await db
       .select()
@@ -92,8 +100,6 @@ export async function createExpenseAction(formData: FormData) {
     if (c.limitTotalCents < used + per) {
       return { error: "Lançamento ultrapassa o limite disponível do cartão" };
     }
-  } else if (d.paymentMethod === "credit" && !d.cardId) {
-    return { error: "Selecione o cartão para compra no crédito" };
   }
 
   const paidAt = normalizePaidAt(d.status, d.paidAt);
@@ -185,6 +191,13 @@ export async function updateExpenseAction(id: string, formData: FormData) {
   const due = parseDateBR(d.dueDate);
   if (!due) return { error: "Data de vencimento inválida" };
   const amountCents = parseMoneyToCents(d.amount);
+  const cardErrU = await validateExpenseCardSelection(
+    s.user.coupleId,
+    d.paymentMethod,
+    d.cardId
+  );
+  if (cardErrU) return { error: cardErrU };
+
   if (d.paymentMethod === "credit" && d.cardId) {
     const [c] = await db
       .select()
@@ -198,16 +211,17 @@ export async function updateExpenseAction(id: string, formData: FormData) {
     if (!c) return { error: "Cartão inválido" };
     const used = await getCardUsedCents(s.user.coupleId, d.cardId);
     const prevOnThis =
-      prev.cardId === d.cardId && prev.status !== "cancelled"
+      prev.cardId === d.cardId &&
+      prev.status !== "cancelled" &&
+      prev.paymentMethod === "credit"
         ? prev.amountCents
         : 0;
-    const newCount = d.status !== "cancelled" ? amountCents : 0;
+    const newCount =
+      d.status !== "cancelled" && d.paymentMethod === "credit" ? amountCents : 0;
     const newTotal = used - prevOnThis + newCount;
     if (c.limitTotalCents < newTotal) {
       return { error: "Lançamento ultrapassa o limite do cartão" };
     }
-  } else if (d.paymentMethod === "credit" && !d.cardId) {
-    return { error: "Selecione o cartão" };
   }
   const paidAt = normalizePaidAt(d.status, d.paidAt);
   await db

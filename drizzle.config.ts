@@ -1,14 +1,13 @@
 import { defineConfig } from "drizzle-kit";
-import path from "path";
 
-const filePath = process.env.DATABASE_PATH ?? path.join(process.cwd(), "data", "app.db");
-/* drizzle-kit 0.31+ usa esquema file: para LibSQL (SQLite) */
-const dbUrl = filePath.replace(/\\/g, "/");
-const fileUrl = dbUrl.startsWith("file:") ? dbUrl : `file:${dbUrl}`;
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("Defina DATABASE_URL antes de rodar drizzle-kit (ex.: no .env.local).");
+}
 
 export default defineConfig({
   schema: "./src/lib/db/schema.ts",
   out: "./drizzle",
-  dialect: "sqlite",
-  dbCredentials: { url: fileUrl },
+  dialect: "postgresql",
+  dbCredentials: { url: databaseUrl },
 });

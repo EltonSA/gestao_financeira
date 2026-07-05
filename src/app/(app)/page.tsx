@@ -27,18 +27,25 @@ export default async function DashboardPage() {
     name: ch.name,
     value: data.persons.by[childResponsibleValue(ch.id)] ?? 0,
   }));
-  const cardItems = data.cards.items.map((row) => ({
-    name: row.card.name,
-    color: row.card.color,
-    used: row.used,
-    limit: row.card.limitTotalCents,
-    available: row.available,
-    percent: row.percent,
+  const cardItems = data.cardWallets.map((w) => ({
+    name: w.card.name,
+    color: w.card.color,
+    cardKind: w.card.cardKind,
+    used: w.creditUsedCents,
+    limit: w.creditLimitCents,
+    available: w.effectiveCreditAvailableCents,
+    percent: w.percent,
+    incomeOnCard: w.incomeOnCardCents,
+    debitUsedOnCard: w.debitUsedOnCardCents,
+    totalDisponivel: w.totalDisponivelCartaoCents,
+    liquidAfterDebit: w.liquidAfterDebitCents,
   }));
   return (
     <DashboardView
       userName={s.user.name}
       kpi={data.kpi}
+      walletAgg={data.walletAgg}
+      forecast={data.forecast}
       monthBar={data.monthBar}
       daySeries={data.daySeries}
       byCat={data.categories.byCat}
@@ -52,8 +59,9 @@ export default async function DashboardPage() {
       }}
       goals={data.goals}
       cardItems={cardItems}
-      totLimit={data.cards.totLimit}
-      totAvail={data.cards.totAvail}
+      totLimit={data.walletAgg.creditLimitTracked || data.cards.totLimit}
+      totAvail={data.walletAgg.effectiveCreditAvail}
+      totDisponivelCartoes={data.walletAgg.totalDisponivelCartoes}
       topCat={data.categories.top}
       topCard={
         data.cards.top

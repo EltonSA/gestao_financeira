@@ -9,6 +9,7 @@ export type CardFormDefaults = Partial<{
   name: string;
   institution: string;
   owner: string;
+  cardKind: string;
   limitBRL: string;
   closingDay: string;
   dueDay: string;
@@ -44,7 +45,25 @@ export function CardFormFields({
         </Field>
       </div>
 
-      <Field label="Limite total (R$)" hint="Use vírgula para os centavos">
+      <Field
+        label="Função do cartão"
+        hint="Alguns cartões são só crédito, só débito, ou os dois no mesmo plástico."
+      >
+        <Select name="cardKind" required defaultValue={d.cardKind ?? "credit"}>
+          <option value="credit">Somente crédito</option>
+          <option value="debit">Somente débito</option>
+          <option value="both">Crédito e débito</option>
+        </Select>
+      </Field>
+
+      <Field
+        label="Limite de crédito (R$)"
+        hint={
+          (d.cardKind ?? "credit") === "debit"
+            ? "Cartão só débito: deixe 0,00 — o limite de fatura não se aplica."
+            : "Limite total da função crédito. Use vírgula nos centavos."
+        }
+      >
         <Input
           name="limitBRL"
           required
