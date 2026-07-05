@@ -169,6 +169,32 @@ export const recurringExpenses = pgTable(
   (t) => [index("recurring_couple_idx").on(t.coupleId)]
 );
 
+/** Modelos de entrada mensal (salário, aluguel recebido, etc.). */
+export const recurringIncomes = pgTable(
+  "recurring_incomes",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    coupleId: text("couple_id")
+      .notNull()
+      .references(() => couples.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    amountCents: integer("amount_cents").notNull(),
+    dayOfMonth: integer("day_of_month").notNull(),
+    cardId: text("card_id").references(() => cards.id, { onDelete: "set null" }),
+    responsible: text("responsible").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    lastGeneratedYearMonth: text("last_generated_year_month"),
+    createdByUserId: text("created_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: ts(),
+  },
+  (t) => [index("recurring_incomes_couple_idx").on(t.coupleId)]
+);
+
 export const expenses = pgTable(
   "expenses",
   {
@@ -224,6 +250,16 @@ export const incomes = pgTable(
     receivedDate: text("received_date").notNull(),
     cardId: text("card_id").references(() => cards.id, { onDelete: "set null" }),
     responsible: text("responsible").notNull(),
+    /** single | recurring | installment */
+    incomeType: text("income_type").notNull().default("single"),
+    recurrence: text("recurrence").notNull().default("none"),
+    recurringTemplateId: text("recurring_template_id").references(
+      () => recurringIncomes.id,
+      { onDelete: "set null" }
+    ),
+    installmentIndex: integer("installment_index"),
+    installmentTotal: integer("installment_total"),
+    installmentGroupId: text("installment_group_id"),
     createdByUserId: text("created_by_user_id")
       .notNull()
       .references(() => users.id),
@@ -291,6 +327,7 @@ export type Card = typeof cards.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type RecurringExpense = typeof recurringExpenses.$inferSelect;
+export type RecurringIncome = typeof recurringIncomes.$inferSelect;
 export type Income = typeof incomes.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type CoupleChild = typeof coupleChildren.$inferSelect;

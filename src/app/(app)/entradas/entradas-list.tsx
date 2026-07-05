@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Banknote, Edit3, Search, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -21,6 +22,10 @@ export type IncomeRow = {
   receivedDate: string;
   responsible: string;
   cardId: string | null;
+  incomeType?: string;
+  recurrence?: string;
+  installmentIndex?: number | null;
+  installmentTotal?: number | null;
 };
 
 export type EntradasListCtx = {
@@ -54,6 +59,23 @@ export function EntradasList({
 
   const cardName = (id: string | null) =>
     id ? ctx.cards.find((c) => c.id === id)?.name ?? "—" : "—";
+
+  const incomeBadges = (r: IncomeRow) => {
+    const badges: React.ReactNode[] = [];
+    if (r.incomeType === "recurring" || r.recurrence === "monthly") {
+      badges.push(
+        <Badge key="rec" variant="info" className="text-[10px]">Recorrente</Badge>
+      );
+    }
+    if (r.installmentIndex && r.installmentTotal) {
+      badges.push(
+        <Badge key="inst" variant="info" className="text-[10px]">
+          Parcela {r.installmentIndex}/{r.installmentTotal}
+        </Badge>
+      );
+    }
+    return badges;
+  };
 
   return (
     <div className="space-y-4">
@@ -105,7 +127,12 @@ export function EntradasList({
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--surface-muted)]/40 transition-colors">
-                    <td className="px-4 py-3.5 font-medium text-[var(--foreground)] max-w-[220px] truncate">{r.title}</td>
+                    <td className="px-4 py-3.5 font-medium text-[var(--foreground)] max-w-[220px]">
+                      <span className="truncate block">{r.title}</span>
+                      {incomeBadges(r).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">{incomeBadges(r)}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-3.5 text-[var(--foreground-muted)]">{responsibleLabel(r.responsible)}</td>
                     <td className="px-4 py-3.5 text-[var(--foreground-muted)] tabular whitespace-nowrap">
                       {formatDateBRFromISO(r.receivedDate)}
@@ -149,6 +176,9 @@ export function EntradasList({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm text-[var(--foreground)] truncate">{r.title}</p>
+                      {incomeBadges(r).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">{incomeBadges(r)}</div>
+                      )}
                       <p className="text-[11px] text-[var(--foreground-muted)] mt-0.5">
                         {responsibleLabel(r.responsible)} · {cardName(r.cardId)}
                       </p>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { CalendarDays, DollarSign, Tag } from "lucide-react";
 import { childResponsibleValue } from "@/lib/responsible";
@@ -30,13 +31,22 @@ export type IncomeFormDefaults = Partial<{
   receivedDate: string;
   cardId: string;
   responsible: string;
+  incomeType: string;
+  installments: string;
 }>;
 
 export function IncomeFormFields({
   ctx,
   defaults,
-}: { ctx: IncomeFormCtx; defaults?: IncomeFormDefaults }) {
+  showClassification = true,
+}: {
+  ctx: IncomeFormCtx;
+  defaults?: IncomeFormDefaults;
+  showClassification?: boolean;
+}) {
   const d = defaults ?? {};
+  const [incomeType, setIncomeType] = useState(d.incomeType ?? "single");
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -121,6 +131,52 @@ export function IncomeFormFields({
           )}
         </div>
       </div>
+
+      {showClassification && (
+        <div className="space-y-4">
+          <div className="border-b border-[var(--border-subtle)] pb-2">
+            <h3 className="text-sm font-semibold tracking-tight text-[var(--foreground)]">Tipo de recebimento</h3>
+            <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
+              Única, mensal recorrente ou parcelada em vários meses.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field
+              label="Tipo"
+              hint={
+                incomeType === "recurring"
+                  ? "Cria um modelo e repete todo mês no mesmo dia"
+                  : incomeType === "installment"
+                    ? "Divide o valor em parcelas mensais"
+                    : undefined
+              }
+            >
+              <Select
+                name="incomeType"
+                required
+                value={incomeType}
+                onChange={(e) => setIncomeType(e.target.value)}
+              >
+                <option value="single">Única</option>
+                <option value="recurring">Recorrente mensal</option>
+                <option value="installment">Parcelada</option>
+              </Select>
+            </Field>
+            {incomeType === "installment" && (
+              <Field label="Parcelas" hint="Máximo 60">
+                <Input
+                  name="installments"
+                  type="number"
+                  min={2}
+                  max={60}
+                  required
+                  defaultValue={d.installments ?? "2"}
+                />
+              </Field>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
