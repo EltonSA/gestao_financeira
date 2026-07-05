@@ -57,6 +57,7 @@ export default async function DespesasPage() {
           responsible: r.responsible,
           cardId: r.cardId ?? null,
           paymentMethod: r.paymentMethod,
+          isRecurring: !!r.recurringTemplateId,
         }))}
         ctx={{
           cats: cats.map((c) => ({ id: c.id, name: c.name })),

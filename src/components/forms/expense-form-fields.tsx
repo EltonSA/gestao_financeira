@@ -241,10 +241,10 @@ export function ExpenseFormFields({
               defaultValue={d.installments ?? "1"}
             />
           </Field>
-          <Field label="Recorrência">
+          <Field label="Recorrência" hint="Mensal + tipo Fixa cria também um modelo em Recorrentes">
             <Select name="recurrence" defaultValue={d.recurrence ?? "none"}>
-              <option value="none">Única</option>
-              <option value="monthly">Mensal</option>
+              <option value="none">Única (só este lançamento)</option>
+              <option value="monthly">Mensal (repete todo mês)</option>
               <option value="weekly">Semanal</option>
               <option value="yearly">Anual</option>
             </Select>

@@ -26,6 +26,7 @@ export type ExpenseRow = {
   responsible: string;
   cardId: string | null;
   paymentMethod: string;
+  isRecurring: boolean;
 };
 
 export type ListCtx = {
@@ -165,7 +166,12 @@ export function DespesasList({
                   const meta = STATUS_BADGE[eff] ?? STATUS_BADGE.pending;
                   return (
                     <tr key={e.id} className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--surface-muted)]/40 transition-colors">
-                      <td className="px-4 py-3.5 font-medium text-[var(--foreground)] max-w-[220px] truncate">{e.title}</td>
+                      <td className="px-4 py-3.5 font-medium text-[var(--foreground)] max-w-[220px]">
+                        <span className="truncate block">{e.title}</span>
+                        {e.isRecurring && (
+                          <Badge variant="info" className="mt-1 text-[10px]">Recorrente</Badge>
+                        )}
+                      </td>
                       <td className="px-4 py-3.5 text-[var(--foreground-muted)]">{catName[e.categoryId] ?? "—"}</td>
                       <td className="px-4 py-3.5 text-[var(--foreground-muted)]">{responsibleLabel(e.responsible)}</td>
                       <td className="px-4 py-3.5 text-[var(--foreground-muted)] tabular whitespace-nowrap">
@@ -211,6 +217,9 @@ export function DespesasList({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm text-[var(--foreground)] truncate">{e.title}</p>
+                        {e.isRecurring && (
+                          <Badge variant="info" className="mt-1 text-[10px]">Recorrente</Badge>
+                        )}
                         <p className="text-[11px] text-[var(--foreground-muted)] mt-0.5">
                           {catName[e.categoryId] ?? "—"} · {responsibleLabel(e.responsible)}
                         </p>

@@ -10,6 +10,10 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { parseMoneyToCents } from "@/lib/money";
 import { validateExpenseCardSelection } from "@/lib/expenseCardGuard";
+import {
+  currentYearMonth,
+  syncRecurringForCouple,
+} from "@/lib/services/recurringSync";
 
 const rSchema = z.object({
   name: z.string().min(1),
@@ -168,44 +172,7 @@ export async function generateRecurringForMonthFormAction(
 export async function generateRecurringForMonthAction(yearMonth?: string) {
   const s = await requireAuth();
   if (isChildAccount(s.user)) return;
-  const t = new Date();
-  const ym =
-    yearMonth ||
-    `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`;
-  const [y, m] = ym.split("-").map(Number);
-  const recs = await db
-    .select()
-    .from(schema.recurringExpenses)
-    .where(
-      and(
-        eq(schema.recurringExpenses.coupleId, s.user.coupleId),
-        eq(schema.recurringExpenses.isActive, true)
-      )
-    );
-  for (const r of recs) {
-    if (r.lastGeneratedYearMonth === ym) continue;
-    const day = Math.min(r.dayOfMonth, 28);
-    const due = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    await db.insert(schema.expenses).values({
-      coupleId: s.user.coupleId,
-      title: r.name,
-      categoryId: r.categoryId,
-      amountCents: r.amountCents,
-      dueDate: due,
-      paymentMethod: r.paymentMethod,
-      cardId: r.cardId,
-      responsible: r.responsible,
-      expenseType: "fixed",
-      status: "pending",
-      recurrence: "monthly",
-      recurringTemplateId: r.id,
-      createdByUserId: s.user.id,
-    });
-    await db
-      .update(schema.recurringExpenses)
-      .set({ lastGeneratedYearMonth: ym })
-      .where(eq(schema.recurringExpenses.id, r.id));
-  }
+  await syncRecurringForCouple(s.user.coupleId, yearMonth ?? currentYearMonth());
   revalidatePath("/gastos-fixos");
   revalidatePath("/despesas");
   revalidatePath("/");

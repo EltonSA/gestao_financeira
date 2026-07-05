@@ -58,6 +58,7 @@ export default async function DashboardPage() {
         children: childSlices,
       }}
       goals={data.goals}
+      recurring={data.recurring}
       cardItems={cardItems}
       totLimit={data.walletAgg.creditLimitTracked || data.cards.totLimit}
       totAvail={data.walletAgg.effectiveCreditAvail}

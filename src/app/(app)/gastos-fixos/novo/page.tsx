@@ -43,9 +43,9 @@ export default async function NovoGastoFixoPage() {
         >
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Link>
-        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Novo gasto fixo</h1>
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Novo gasto recorrente</h1>
         <p className="mt-1.5 text-sm text-[var(--foreground-muted)]">
-          Modelo recorrente — usado para gerar a despesa mensal automaticamente.
+          Todo mês o sistema cria uma despesa pendente com estes dados (automático ao abrir o app).
         </p>
       </div>
       <Card>

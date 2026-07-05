@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth/session";
 import { syncOverdueForCouple } from "@/lib/syncOverdue";
+import { syncRecurringForCouple } from "@/lib/services/recurringSync";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { isChildAccount } from "@/lib/auth/member";
@@ -14,6 +15,9 @@ export default async function AppLayout({
   const s = await getSession();
   if (!s) redirect("/login");
   await syncOverdueForCouple(s.user.coupleId);
+  if (!isChildAccount(s.user)) {
+    await syncRecurringForCouple(s.user.coupleId);
+  }
   let childAccountLabel: string | null = null;
   if (isChildAccount(s.user) && s.user.linkedChildId) {
     const [row] = await db

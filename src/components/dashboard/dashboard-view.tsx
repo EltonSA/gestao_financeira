@@ -86,6 +86,11 @@ export type DProps = {
     children: { name: string; value: number }[];
   };
   goals: { id: string; name: string; targetCents: number; currentCents: number }[];
+  recurring: {
+    count: number;
+    totalCents: number;
+    items: { id: string; name: string; amountCents: number; dayOfMonth: number }[];
+  };
   cardItems: {
     name: string;
     color: string;
@@ -133,6 +138,7 @@ export function DashboardView(p: DProps) {
     daySeries,
     byPerson,
     goals,
+    recurring,
     totLimit,
     totAvail,
     totDisponivelCartoes,
@@ -643,6 +649,48 @@ export function DashboardView(p: DProps) {
               <InsightCard key={i.id} message={i.message} severity={i.severity} />
             ))}
           </ul>
+        )}
+      </section>
+
+      {/* Gastos recorrentes */}
+      <section className="space-y-3">
+        <div className="flex items-end justify-between">
+          <div>
+            <h2 className="h2 inline-flex items-center gap-2">
+              <HandCoins className="h-[18px] w-[18px] text-[var(--primary)]" />
+              Gastos recorrentes
+            </h2>
+            <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
+              {recurring.count > 0
+                ? `${formatBRL(recurring.totalCents)}/mês em ${recurring.count} compromisso(s) · gerados automaticamente`
+                : "Cadastre contas fixas para gerar despesas todo mês"}
+            </p>
+          </div>
+          <Link href="/gastos-fixos" className="text-xs font-semibold text-[var(--primary)] hover:underline inline-flex items-center gap-1">
+            Gerenciar <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+        {recurring.count === 0 ? (
+          <EmptyState
+            icon={<HandCoins className="h-5 w-5" />}
+            title="Sem recorrentes"
+            description="Aluguel, internet, plano de saúde… cadastre uma vez e o app lança a despesa todo mês."
+            action={
+              <Link href="/gastos-fixos/novo" className="text-sm font-semibold text-[var(--primary)] hover:underline">
+                Cadastrar recorrente
+              </Link>
+            }
+          />
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {recurring.items.slice(0, 8).map((r) => (
+              <Card key={r.id} hover className="p-4">
+                <p className="font-semibold text-sm tracking-tight truncate">{r.name}</p>
+                <p className="mt-1 text-[11px] text-[var(--foreground-muted)]">Vence dia {r.dayOfMonth}</p>
+                <p className="mt-2 text-base font-semibold tabular">{formatBRL(r.amountCents)}</p>
+              </Card>
+            ))}
+          </div>
         )}
       </section>
 

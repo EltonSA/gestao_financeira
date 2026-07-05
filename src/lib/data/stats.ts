@@ -207,6 +207,16 @@ export async function getDashboardData(coupleId: string) {
     categories: { byCat, top: topCat ? { name: catName(topCat[0]), c: topCat[1] } : null, catName },
     persons: { by: byPerson, labels: null as { p1: string; p2: string } | null },
     goals,
+    recurring: {
+      count: recs.length,
+      totalCents: fixedMonthlyCents,
+      items: recs.map((r) => ({
+        id: r.id,
+        name: r.name,
+        amountCents: r.amountCents,
+        dayOfMonth: r.dayOfMonth,
+      })),
+    },
     daySeries,
     monthBar: {
       thisMonth: csum,

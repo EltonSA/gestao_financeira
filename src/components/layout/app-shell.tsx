@@ -32,7 +32,7 @@ const NAV_PRIMARY: NavItem[] = [
   { href: "/", label: "Visão geral", icon: Home },
   { href: "/despesas", label: "Despesas", icon: LayoutList },
   { href: "/entradas", label: "Entradas", icon: Banknote },
-  { href: "/gastos-fixos", label: "Gastos fixos", icon: HandCoins },
+  { href: "/gastos-fixos", label: "Recorrentes", icon: HandCoins },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/cofrinhos", label: "Cofrinhos", icon: PiggyBank },
 ];

@@ -7,6 +7,7 @@ import { isChildAccount, responsibleTagForChildUser } from "@/lib/auth/member";
 import { assertResponsibleBelongsToCouple } from "@/lib/data/children";
 import { getCardUsedCents } from "@/lib/services/cardLimit";
 import { validateExpenseCardSelection } from "@/lib/expenseCardGuard";
+import { createRecurringTemplateFromExpense } from "@/lib/services/recurringSync";
 import { parseDateBR } from "@/lib/dates";
 import { parseMoneyToCents } from "@/lib/money";
 import { revalidatePath } from "next/cache";
@@ -108,6 +109,27 @@ export async function createExpenseAction(formData: FormData) {
       ? d.installments
       : 1;
   const group = inst > 1 ? crypto.randomUUID() : null;
+
+  let recurringTemplateId: string | null = null;
+  if (
+    !childTag &&
+    d.recurrence === "monthly" &&
+    d.expenseType === "fixed" &&
+    inst === 1
+  ) {
+    recurringTemplateId = await createRecurringTemplateFromExpense({
+      coupleId: s.user.coupleId,
+      userId: s.user.id,
+      title: d.title,
+      amountCents,
+      categoryId: d.categoryId,
+      dueDate: due,
+      paymentMethod: d.paymentMethod,
+      cardId: d.cardId ?? null,
+      responsible,
+    });
+  }
+
   const [y0, m0, day0] = due.split("-").map(Number);
   for (let i = 0; i < inst; i++) {
     const eid = crypto.randomUUID();
@@ -135,6 +157,7 @@ export async function createExpenseAction(formData: FormData) {
       expenseType: d.expenseType,
       status: st,
       recurrence: d.recurrence,
+      recurringTemplateId: i === 0 ? recurringTemplateId : null,
       createdByUserId: s.user.id,
       updatedByUserId: s.user.id,
       installmentIndex: inst > 1 ? i + 1 : null,
@@ -142,6 +165,8 @@ export async function createExpenseAction(formData: FormData) {
       installmentGroupId: group,
     });
   }
+
+  if (recurringTemplateId) revalidatePath("/gastos-fixos");
 
   revalidatePath("/despesas");
   revalidatePath("/");
