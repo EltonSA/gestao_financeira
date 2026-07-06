@@ -257,3 +257,47 @@ body {
   opacity: 0.45;
   border-radius: inherit;
 }
+
+/* Calendário (react-day-picker) */
+.date-picker-calendar {
+  --rdp-accent-color: var(--primary);
+  --rdp-accent-background-color: var(--primary-soft);
+  --rdp-day-height: 2.25rem;
+  --rdp-day-width: 2.25rem;
+  --rdp-day_button-border-radius: 0.65rem;
+  --rdp-selected-border: none;
+  --rdp-today-color: var(--primary);
+  font-size: 0.875rem;
+}
+
+.date-picker-calendar .rdp-month_caption {
+  font-weight: 600;
+  color: var(--foreground);
+  text-transform: capitalize;
+}
+
+.date-picker-calendar .rdp-weekday {
+  color: var(--foreground-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.date-picker-calendar .rdp-day_button {
+  color: var(--foreground);
+}
+
+.date-picker-calendar .rdp-day_button:hover {
+  background: var(--surface-muted);
+}
+
+.date-picker-calendar .rdp-selected .rdp-day_button {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+}
+
+.date-picker-calendar .rdp-today:not(.rdp-selected) .rdp-day_button {
+  color: var(--primary);
+  font-weight: 600;
+}

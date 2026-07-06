@@ -8,6 +8,7 @@ import { PAYMENT_METHODS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker";
 import { Banknote } from "lucide-react";
 
 const initial = {} as { error?: string; ok?: boolean };
@@ -63,8 +64,8 @@ export function PayInvoiceDialog({
               ))}
             </Select>
           </Field>
-          <Field label="Data do pagamento" hint="dd/mm/aaaa">
-            <Input name="paidAt" placeholder="Hoje se vazio" />
+          <Field label="Data do pagamento" hint="Vazio usa hoje">
+            <DatePickerField name="paidAt" optional placeholder="Hoje se vazio" />
           </Field>
           {state.error && (
             <p className="text-sm text-[var(--danger-strong)]">{state.error}</p>

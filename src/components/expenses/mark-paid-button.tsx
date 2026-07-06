@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { markPaidExpenseAction } from "@/actions/expenses";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import { formatBRL } from "@/lib/money";
-import { formatDateBRFromISO } from "@/lib/dates";
+import { formatDateBRFromISO, ymdToday, parseISODate } from "@/lib/dates";
 import { cardSupportsCredit, cardSupportsDebit } from "@/lib/cardKind";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, Input, Select } from "@/components/ui/input";
+import { Field, Select } from "@/components/ui/input";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { CheckCircle2 } from "lucide-react";
 
 const initial = {} as { error?: string; ok?: boolean };
@@ -58,6 +61,7 @@ export function MarkPaidDialog({
   const [state, action, pending] = useActionState(markPaidExpenseAction, initial);
   const [pm, setPm] = useState(defaultPaymentMethod);
   const [cardId, setCardId] = useState(defaultCardId ?? "");
+  const [paidDateIso, setPaidDateIso] = useState(ymdToday());
 
   const creditCards = useMemo(
     () => cards.filter((c) => cardSupportsCredit(c.cardKind)),
@@ -74,6 +78,7 @@ export function MarkPaidDialog({
     if (!open) return;
     setPm(defaultPaymentMethod);
     setCardId(defaultCardId ?? "");
+    setPaidDateIso(ymdToday());
   }, [open, defaultPaymentMethod, defaultCardId]);
 
   useEffect(() => {
@@ -88,6 +93,10 @@ export function MarkPaidDialog({
       router.refresh();
     }
   }, [state.ok, router]);
+
+  const paidAtBr = paidDateIso
+    ? format(parseISODate(paidDateIso), "dd/MM/yyyy", { locale: ptBR })
+    : "";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -156,8 +165,9 @@ export function MarkPaidDialog({
               </Select>
             </Field>
           )}
-          <Field label="Data do pagamento" hint="Deixe vazio para usar hoje">
-            <Input name="paidAt" placeholder="DD/MM/AAAA" />
+          <input type="hidden" name="paidAt" value={paidAtBr} />
+          <Field label="Data do pagamento" hint="Toque para abrir o calendário">
+            <DatePicker value={paidDateIso} onChange={setPaidDateIso} />
           </Field>
           {state.error && (
             <p className="text-sm text-[var(--danger-strong)]">{state.error}</p>

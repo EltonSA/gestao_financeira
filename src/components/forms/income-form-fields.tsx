@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
-import { CalendarDays, DollarSign, Tag } from "lucide-react";
+import { DollarSign, Tag } from "lucide-react";
 import { childResponsibleValue } from "@/lib/responsible";
 import { firstInstallmentDueDate, formatDateBRFromISO } from "@/lib/dates";
 import { MONTH_DAY_OPTIONS, monthDayLabel } from "@/lib/month-day";
+import { DatePickerField } from "@/components/ui/date-picker";
 
 const INS: Record<string, string> = {
   nubank: "Nubank",
@@ -180,14 +181,8 @@ export function IncomeFormFields({
               </Select>
             </Field>
           ) : (
-            <Field label="Data do recebimento" hint="DD/MM/AAAA">
-              <Input
-                name="receivedDate"
-                required
-                placeholder="01/01/2026"
-                defaultValue={d.receivedDate}
-                leftIcon={<CalendarDays className="h-4 w-4" />}
-              />
+            <Field label="Data do recebimento" hint="Toque para abrir o calendário">
+              <DatePickerField name="receivedDate" defaultBr={d.receivedDate} />
             </Field>
           )}
         </div>

@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, Input, Textarea } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker";
 import {
   GoalFormFields,
   type GoalFormCtx,
@@ -146,8 +147,8 @@ export function AporteButton({ goalId }: { goalId: string }) {
           <Field label="Valor (R$)">
             <Input name="amount" required placeholder="0,00" inputMode="decimal" autoFocus />
           </Field>
-          <Field label="Data" hint="DD/MM/AAAA">
-            <Input name="date" required defaultValue={todayBR} />
+          <Field label="Data" hint="Toque para abrir o calendário">
+            <DatePickerField name="date" defaultBr={todayBR} />
           </Field>
           <Field label="Observação (opcional)">
             <Textarea name="note" rows={2} placeholder="Ex.: bônus do salário" />

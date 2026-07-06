@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
-import { CalendarDays, DollarSign, Tag } from "lucide-react";
+import { DollarSign, Tag } from "lucide-react";
 import { childResponsibleValue } from "@/lib/responsible";
 import { cardSupportsCredit, cardSupportsDebit } from "@/lib/cardKind";
 import { firstInstallmentDueDate, formatDateBRFromISO } from "@/lib/dates";
 import { MONTH_DAY_OPTIONS, monthDayLabel } from "@/lib/month-day";
+import { DatePickerField } from "@/components/ui/date-picker";
 
 const PM = [
   { value: "cash", label: "Dinheiro" },
@@ -250,14 +251,8 @@ export function ExpenseFormFields({
               </Select>
             </Field>
           ) : (
-            <Field label="Vencimento" hint="DD/MM/AAAA">
-              <Input
-                name="dueDate"
-                required
-                placeholder="01/01/2026"
-                defaultValue={d.dueDate}
-                leftIcon={<CalendarDays className="h-4 w-4" />}
-              />
+            <Field label="Vencimento" hint="Toque para abrir o calendário">
+              <DatePickerField name="dueDate" defaultBr={d.dueDate} />
             </Field>
           )}
         </div>
@@ -299,8 +294,8 @@ export function ExpenseFormFields({
             <div aria-hidden className="hidden sm:block" />
           )}
         </div>
-        <Field label="Data de pagamento" hint="Preencha se já foi pago">
-          <Input name="paidAt" placeholder="DD/MM/AAAA (opcional)" defaultValue={d.paidAt} />
+        <Field label="Data de pagamento" hint="Opcional — se já foi pago">
+          <DatePickerField name="paidAt" defaultBr={d.paidAt} optional />
         </Field>
       </Section>
 

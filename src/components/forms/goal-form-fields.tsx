@@ -1,6 +1,7 @@
 "use client";
 
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker";
 import { GOAL_CATEGORIES } from "@/lib/constants";
 import { childResponsibleValue } from "@/lib/responsible";
 
@@ -61,8 +62,8 @@ export function GoalFormFields({
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Prazo" hint="DD/MM/AAAA (opcional)">
-          <Input name="dueDate" placeholder="01/12/2026" defaultValue={d.dueDate} />
+        <Field label="Prazo" hint="Opcional">
+          <DatePickerField name="dueDate" defaultBr={d.dueDate} optional />
         </Field>
         <Field label="Categoria">
           <Select name="goalCategory" required defaultValue={d.goalCategory ?? "other"}>
