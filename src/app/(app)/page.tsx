@@ -7,10 +7,13 @@ import { db, schema } from "@/lib/db";
 import { eq, isNull, or } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: { searchParams: Promise<{ ciclo?: string }> }) {
   const s = await getSession();
   if (!s) redirect("/login");
-  const data = await getDashboardData(s.user.coupleId);
+  const { ciclo } = await searchParams;
+  const data = await getDashboardData(s.user.coupleId, ciclo);
   const labels = await loadCoupleLabels(s.user.coupleId);
   const cats = await db
     .select()
@@ -43,6 +46,8 @@ export default async function DashboardPage() {
     <DashboardView
       userName={s.user.name}
       financialCycle={data.financialCycle}
+      isCurrentCycle={data.isCurrentCycle}
+      cycleNav={data.cycleNav}
       realBalance={data.realBalance}
       kpi={data.kpi}
       walletAgg={data.walletAgg}

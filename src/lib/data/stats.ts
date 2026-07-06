@@ -12,15 +12,21 @@ import {
   coupleToFinancialSettings,
   getFinancialCycleForDate,
   getPreviousFinancialCycle,
+  parseCycleParam,
+  isSameFinancialCycle,
+  referenceDateForCycle,
+  expenseInCycle,
   daysInCycle,
   dayOfCycle,
   daysLeftInCycle,
   ymdFromDate,
+  cycleToParam,
+  getNextFinancialCycle,
   type FinancialCycleRange,
 } from "@/lib/financial-cycle";
 
-function inCycle(iso: string, cycle: FinancialCycleRange) {
-  return iso >= cycle.startDate && iso <= cycle.endDate;
+function incomeInCycle(receivedDate: string, cycle: FinancialCycleRange) {
+  return receivedDate >= cycle.startDate && receivedDate <= cycle.endDate;
 }
 
 export async function getCoupleFinancialSettings(coupleId: string) {
@@ -38,10 +44,33 @@ export async function getCoupleFinancialSettings(coupleId: string) {
   return coupleToFinancialSettings(c);
 }
 
-export async function getDashboardData(coupleId: string) {
+export async function resolveFinancialCycleContext(
+  coupleId: string,
+  cicloParam?: string | null
+) {
+  const settings = await getCoupleFinancialSettings(coupleId);
+  const currentCycle = getFinancialCycleForDate(new Date(), settings);
+  const cycle = parseCycleParam(cicloParam, settings);
+  return {
+    settings,
+    cycle,
+    currentCycle,
+    isCurrentCycle: isSameFinancialCycle(cycle, currentCycle),
+    prevParam: cycleToParam(getPreviousFinancialCycle(cycle, settings)),
+    nextParam: cycleToParam(getNextFinancialCycle(cycle, settings)),
+  };
+}
+
+export async function getDashboardData(
+  coupleId: string,
+  cicloParam?: string | null
+) {
   const now = new Date();
   const settings = await getCoupleFinancialSettings(coupleId);
-  const cycle = getFinancialCycleForDate(now, settings);
+  const currentCycle = getFinancialCycleForDate(now, settings);
+  const cycle = parseCycleParam(cicloParam, settings);
+  const isCurrentCycle = isSameFinancialCycle(cycle, currentCycle);
+  const refDate = referenceDateForCycle(cycle, currentCycle, now);
   const prevCycle = getPreviousFinancialCycle(cycle, settings);
   const tStr = ymdFromDate(now);
   const d7 = subDays(now, 6);
@@ -58,26 +87,28 @@ export async function getDashboardData(coupleId: string) {
     .where(eq(schema.incomes.coupleId, coupleId));
 
   const exCycle = allEx.filter(
-    (e) => inCycle(e.dueDate, cycle) && e.status !== "cancelled"
+    (e) => expenseInCycle(e.dueDate, cycle) && e.status !== "cancelled"
   );
   const exPrev = allEx.filter(
-    (e) => inCycle(e.dueDate, prevCycle) && e.status === "paid"
+    (e) => expenseInCycle(e.dueDate, prevCycle) && e.status === "paid"
   );
 
-  const inCycleIncomes = allIn.filter((i) => inCycle(i.receivedDate, cycle));
+  const inCycleIncomes = allIn.filter((i) => incomeInCycle(i.receivedDate, cycle));
 
   let todayPaid = 0;
   let todayExpenseAll = 0;
   let day7 = 0;
-  for (const e of allEx) {
-    if (e.status === "paid" && e.paidAt === tStr) {
-      todayPaid += e.amountCents;
-    }
-    if (e.status !== "cancelled" && e.dueDate === tStr) {
-      todayExpenseAll += e.amountCents;
-    }
-    if (e.status === "paid" && e.paidAt && e.paidAt >= d7s && e.paidAt <= tStr) {
-      day7 += e.amountCents;
+  if (isCurrentCycle) {
+    for (const e of allEx) {
+      if (e.status === "paid" && e.paidAt === tStr) {
+        todayPaid += e.amountCents;
+      }
+      if (e.status !== "cancelled" && e.dueDate === tStr) {
+        todayExpenseAll += e.amountCents;
+      }
+      if (e.status === "paid" && e.paidAt && e.paidAt >= d7s && e.paidAt <= tStr) {
+        day7 += e.amountCents;
+      }
     }
   }
 
@@ -152,15 +183,17 @@ export async function getDashboardData(coupleId: string) {
     );
   const fixedMonthlyCents = recs.reduce((s, r) => s + r.amountCents, 0);
 
-  const horizon = ymdFromDate(addDays(now, 14));
   let upcoming14Cents = 0;
   let upcoming14Count = 0;
-  for (const e of allEx) {
-    if (e.status === "cancelled") continue;
-    if (e.dueDate > tStr && e.dueDate <= horizon) {
-      if (e.status === "pending" || getEffectiveStatus(e.dueDate, e.status) === "overdue") {
-        upcoming14Cents += e.amountCents;
-        upcoming14Count += 1;
+  if (isCurrentCycle) {
+    const horizon = ymdFromDate(addDays(now, 14));
+    for (const e of allEx) {
+      if (e.status === "cancelled") continue;
+      if (e.dueDate > tStr && e.dueDate <= horizon) {
+        if (e.status === "pending" || getEffectiveStatus(e.dueDate, e.status) === "overdue") {
+          upcoming14Cents += e.amountCents;
+          upcoming14Count += 1;
+        }
       }
     }
   }
@@ -174,9 +207,9 @@ export async function getDashboardData(coupleId: string) {
     .from(schema.goals)
     .where(eq(schema.goals.coupleId, coupleId));
 
-  const dom = dayOfCycle(now, cycle);
+  const dom = dayOfCycle(refDate, cycle);
   const cycleDays = daysInCycle(cycle);
-  const daysLeft = daysLeftInCycle(now, cycle);
+  const daysLeft = daysLeftInCycle(refDate, cycle);
   const avg = dom > 0 ? csum / dom : 0;
   const proj = dom > 0 ? (csum / dom) * cycleDays : 0;
   const pendingSum = cyclePend.reduce((a, b) => a + b.amountCents, 0);
@@ -189,18 +222,37 @@ export async function getDashboardData(coupleId: string) {
   const projCommitCycleEnd = Math.round((cycleTotalAll / Math.max(1, dom)) * cycleDays);
 
   const daySeries: { d: string; c: number }[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = ymdFromDate(subDays(now, 6 - i));
-    const v = allEx
-      .filter((e) => e.paidAt === d && e.status === "paid")
-      .reduce((a, b) => a + b.amountCents, 0);
-    daySeries.push({ d, c: v });
+  if (isCurrentCycle) {
+    for (let i = 0; i < 7; i++) {
+      const d = ymdFromDate(subDays(now, 6 - i));
+      const v = allEx
+        .filter((e) => e.paidAt === d && e.status === "paid")
+        .reduce((a, b) => a + b.amountCents, 0);
+      daySeries.push({ d, c: v });
+    }
+  } else {
+    for (let i = 0; i < 7; i++) {
+      const d = ymdFromDate(subDays(refDate, 6 - i));
+      if (d < cycle.startDate || d > cycle.endDate) {
+        daySeries.push({ d, c: 0 });
+        continue;
+      }
+      const v = allEx
+        .filter((e) => e.paidAt === d && e.status === "paid")
+        .reduce((a, b) => a + b.amountCents, 0);
+      daySeries.push({ d, c: v });
+    }
   }
 
   const insights = await runInsights(coupleId, settings, cycle);
 
   return {
     financialCycle: cycle,
+    isCurrentCycle,
+    cycleNav: {
+      prevParam: cycleToParam(getPreviousFinancialCycle(cycle, settings)),
+      nextParam: cycleToParam(getNextFinancialCycle(cycle, settings)),
+    },
     realBalance,
     kpi: {
       today: todayPaid,

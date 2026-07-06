@@ -147,6 +147,57 @@ export function getPreviousFinancialCycle(
   return getFinancialCycleRange(py, pm, settings);
 }
 
+export function getNextFinancialCycle(
+  cycle: FinancialCycleRange,
+  settings: FinancialCycleSettings
+): FinancialCycleRange {
+  let ny = cycle.year;
+  let nm = cycle.month + 1;
+  if (nm > 12) {
+    nm = 1;
+    ny += 1;
+  }
+  return getFinancialCycleRange(ny, nm, settings);
+}
+
+/** Query param `ciclo=YYYY-MM` para o ciclo financeiro de referência. */
+export function cycleToParam(cycle: Pick<FinancialCycleRange, "year" | "month">): string {
+  return `${cycle.year}-${String(cycle.month).padStart(2, "0")}`;
+}
+
+export function parseCycleParam(
+  param: string | undefined | null,
+  settings: FinancialCycleSettings
+): FinancialCycleRange {
+  if (!param || !/^\d{4}-\d{2}$/.test(param)) {
+    return getFinancialCycleForDate(new Date(), settings);
+  }
+  const [y, m] = param.split("-").map(Number);
+  if (!y || m < 1 || m > 12) {
+    return getFinancialCycleForDate(new Date(), settings);
+  }
+  return getFinancialCycleRange(y, m, settings);
+}
+
+export function isSameFinancialCycle(a: FinancialCycleRange, b: FinancialCycleRange): boolean {
+  return a.year === b.year && a.month === b.month;
+}
+
+export function referenceDateForCycle(
+  cycle: FinancialCycleRange,
+  currentCycle: FinancialCycleRange,
+  now = new Date()
+): Date {
+  if (isSameFinancialCycle(cycle, currentCycle)) return now;
+  const today = ymdFromDate(now);
+  if (cycle.endDate < today) return parseYmd(cycle.endDate);
+  return parseYmd(cycle.startDate);
+}
+
+export function expenseInCycle(dueDate: string, cycle: FinancialCycleRange): boolean {
+  return dueDate >= cycle.startDate && dueDate <= cycle.endDate;
+}
+
 export function daysInCycle(cycle: FinancialCycleRange): number {
   const start = parseYmd(cycle.startDate);
   const end = parseYmd(cycle.endDate);

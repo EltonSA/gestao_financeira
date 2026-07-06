@@ -1,11 +1,10 @@
 import { getSession } from "@/lib/auth/session";
-import { getCoupleFinancialSettings } from "@/lib/data/stats";
+import { resolveFinancialCycleContext } from "@/lib/data/stats";
 import { listOpenInvoicesForCouple } from "@/lib/services/cardInvoice";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { formatBRL } from "@/lib/money";
 import { formatDateBRFromISO, getEffectiveStatus } from "@/lib/dates";
-import { getFinancialCycleForDate } from "@/lib/financial-cycle";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { CalendarDays, CreditCard as CreditCardIcon, PiggyBank } from "lucide-react";
@@ -13,12 +12,16 @@ import { Badge, STATUS_BADGE } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { FinancialCycleNav } from "@/components/financial-cycle-nav";
 
-export default async function CalendarioPage() {
+export default async function CalendarioPage({
+  searchParams,
+}: { searchParams: Promise<{ ciclo?: string }> }) {
   const s = await getSession();
   if (!s) redirect("/login");
-  const settings = await getCoupleFinancialSettings(s.user.coupleId);
-  const cycle = getFinancialCycleForDate(new Date(), settings);
+  const { ciclo } = await searchParams;
+  const cycleCtx = await resolveFinancialCycleContext(s.user.coupleId, ciclo);
+  const cycle = cycleCtx.cycle;
   const [ex, cards, goals, openInvoices] = await Promise.all([
     db.select().from(schema.expenses).where(eq(schema.expenses.coupleId, s.user.coupleId)),
     db.select().from(schema.cards).where(eq(schema.cards.coupleId, s.user.coupleId)),
@@ -43,6 +46,14 @@ export default async function CalendarioPage() {
         eyebrow="Agenda"
         title="Calendário financeiro"
         description={`Ciclo ${cycle.label} (${formatDateBRFromISO(cycle.startDate)} a ${formatDateBRFromISO(cycle.endDate)}).`}
+      />
+
+      <FinancialCycleNav
+        cycle={cycle}
+        basePath="/calendario"
+        prevParam={cycleCtx.prevParam}
+        nextParam={cycleCtx.nextParam}
+        isCurrent={cycleCtx.isCurrentCycle}
       />
 
       {openInvoices.length > 0 && (

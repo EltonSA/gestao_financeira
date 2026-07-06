@@ -4,15 +4,15 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatBRL } from "@/lib/money";
 import { formatDateBRFromISO } from "@/lib/dates";
-import { markPaidFormAction } from "@/actions/expenses";
 import { labelForResponsible, childResponsibleValue } from "@/lib/responsible";
+import { canMarkExpenseAsPaid, MarkPaidDialog } from "@/components/expenses/mark-paid-button";
 import { Badge, STATUS_BADGE } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
-import { CheckCircle2, Edit3, Filter, Search, ListChecks } from "lucide-react";
+import { Edit3, Filter, Search, ListChecks } from "lucide-react";
 
 export type ExpenseRow = {
   id: string;
@@ -31,7 +31,7 @@ export type ExpenseRow = {
 
 export type ListCtx = {
   cats: { id: string; name: string }[];
-  cards: { id: string; name: string }[];
+  cards: { id: string; name: string; cardKind: string }[];
   p1: string;
   p2: string;
   children: { id: string; name: string }[];
@@ -42,7 +42,12 @@ type FilterStatus = "all" | "pending" | "paid" | "overdue";
 export function DespesasList({
   rows,
   ctx,
-}: { rows: ExpenseRow[]; ctx: ListCtx }) {
+  cycleLabel,
+}: {
+  rows: ExpenseRow[];
+  ctx: ListCtx;
+  cycleLabel?: string;
+}) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<FilterStatus>("all");
   const [categoryId, setCategoryId] = useState<string>("");
@@ -130,6 +135,7 @@ export function DespesasList({
           <p className="text-xs text-[var(--foreground-muted)] inline-flex items-center gap-1.5">
             <Filter className="h-3 w-3" />
             {filtered.length} de {rows.length} despesa(s)
+            {cycleLabel ? ` no ciclo ${cycleLabel}` : ""}
           </p>
           <p className="text-xs text-[var(--foreground-muted)]">
             Total filtrado: <span className="font-semibold tabular text-[var(--foreground)]">{formatBRL(total)}</span>
@@ -141,8 +147,12 @@ export function DespesasList({
       {filtered.length === 0 ? (
         <EmptyState
           icon={<ListChecks className="h-5 w-5" />}
-          title="Nenhuma despesa encontrada"
-          description="Ajuste os filtros ou crie uma nova despesa para começar."
+          title="Nenhuma despesa neste ciclo"
+          description={
+            cycleLabel
+              ? `Não há despesas com vencimento no ciclo ${cycleLabel}. Avance para outro período ou crie uma nova despesa.`
+              : "Ajuste os filtros ou crie uma nova despesa para começar."
+          }
         />
       ) : (
         <Card className="overflow-hidden">
@@ -184,14 +194,17 @@ export function DespesasList({
                         <Badge variant={meta.variant} dot>{meta.label}</Badge>
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center justify-end gap-1">
-                          {eff === "pending" && (
-                            <form action={markPaidFormAction}>
-                              <input type="hidden" name="id" value={e.id} />
-                              <Button type="submit" size="icon-sm" variant="ghost" title="Marcar como pago">
-                                <CheckCircle2 className="h-4 w-4 text-[var(--success)]" />
-                              </Button>
-                            </form>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canMarkExpenseAsPaid(e.status) && (
+                            <MarkPaidDialog
+                              expenseId={e.id}
+                              title={e.title}
+                              amountCents={e.amountCents}
+                              dueDate={e.dueDate}
+                              defaultPaymentMethod={e.paymentMethod}
+                              defaultCardId={e.cardId}
+                              cards={ctx.cards}
+                            />
                           )}
                           <Button asChild size="icon-sm" variant="ghost" title="Editar">
                             <Link href={`/despesas/${e.id}/editar`}>
@@ -233,13 +246,19 @@ export function DespesasList({
                       </div>
                     </div>
                   </Link>
-                  {eff === "pending" && (
-                    <form action={markPaidFormAction} className="shrink-0">
-                      <input type="hidden" name="id" value={e.id} />
-                      <Button type="submit" size="icon-sm" variant="soft" title="Marcar como pago">
-                        <CheckCircle2 className="h-4 w-4" />
-                      </Button>
-                    </form>
+                  {canMarkExpenseAsPaid(e.status) && (
+                    <MarkPaidDialog
+                      expenseId={e.id}
+                      title={e.title}
+                      amountCents={e.amountCents}
+                      dueDate={e.dueDate}
+                      defaultPaymentMethod={e.paymentMethod}
+                      defaultCardId={e.cardId}
+                      cards={ctx.cards}
+                      showLabel={false}
+                      size="icon-sm"
+                      variant="soft"
+                    />
                   )}
                 </li>
               );

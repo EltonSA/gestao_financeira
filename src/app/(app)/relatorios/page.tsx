@@ -7,12 +7,16 @@ import { redirect } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight, Users, Wallet, AlertCircle, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { FinancialCycleNav } from "@/components/financial-cycle-nav";
 import { Avatar } from "@/components/ui/avatar";
 
-export default async function RelatoriosPage() {
+export default async function RelatoriosPage({
+  searchParams,
+}: { searchParams: Promise<{ ciclo?: string }> }) {
   const s = await getSession();
   if (!s) redirect("/login");
-  const d = await getDashboardData(s.user.coupleId);
+  const { ciclo } = await searchParams;
+  const d = await getDashboardData(s.user.coupleId, ciclo);
   const labels = await loadCoupleLabels(s.user.coupleId);
   const children = await listChildrenByCouple(s.user.coupleId);
 
@@ -27,6 +31,14 @@ export default async function RelatoriosPage() {
         eyebrow="Análise"
         title="Relatórios"
         description={`Ciclo ${d.financialCycle.label} (${d.financialCycle.startDate} a ${d.financialCycle.endDate}).`}
+      />
+
+      <FinancialCycleNav
+        cycle={d.financialCycle}
+        basePath="/relatorios"
+        prevParam={d.cycleNav.prevParam}
+        nextParam={d.cycleNav.nextParam}
+        isCurrent={d.isCurrentCycle}
       />
 
       <Card className="p-5 border-[var(--success)]/20">

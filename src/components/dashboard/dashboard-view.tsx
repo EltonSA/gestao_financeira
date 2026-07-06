@@ -40,13 +40,16 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Progress } from "@/components/ui/progress";
+import { FinancialCycleNav } from "@/components/financial-cycle-nav";
 import { useMemo, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 export type InsightP = { id: string; message: string; severity: string };
 export type DProps = {
   userName: string;
-  financialCycle: { startDate: string; endDate: string; label: string };
+  financialCycle: { startDate: string; endDate: string; label: string; year: number; month: number };
+  isCurrentCycle: boolean;
+  cycleNav: { prevParam: string; nextParam: string };
   realBalance: {
     totalIncomesCents: number;
     paidNonCreditExpensesCents: number;
@@ -138,6 +141,8 @@ export function DashboardView(p: DProps) {
   const {
     userName,
     financialCycle,
+    isCurrentCycle,
+    cycleNav,
     realBalance,
     kpi,
     walletAgg,
@@ -206,6 +211,23 @@ export function DashboardView(p: DProps) {
         </p>
       </section>
 
+      <FinancialCycleNav
+        cycle={financialCycle}
+        basePath="/"
+        prevParam={cycleNav.prevParam}
+        nextParam={cycleNav.nextParam}
+        isCurrent={isCurrentCycle}
+      />
+
+      {!isCurrentCycle && (
+        <Card className="border-[var(--primary-soft)] bg-[var(--primary-soft)]/20">
+          <CardContent className="p-4 text-sm text-[var(--foreground-muted)]">
+            Você está vendo o ciclo <strong className="text-[var(--foreground)]">{financialCycle.label}</strong>.
+            Indicadores de &quot;hoje&quot; e previsões dos próximos 14 dias aparecem apenas no ciclo atual.
+          </CardContent>
+        </Card>
+      )}
+
       {/* Saldo real + cartões */}
       <section className="grid lg:grid-cols-2 gap-4">
         <Card className="border-[var(--success)]/20 bg-[var(--success-bg)]/30">
@@ -252,7 +274,12 @@ export function DashboardView(p: DProps) {
       </section>
 
       {/* KPIs principais */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <section
+        className={cn(
+          "grid gap-3",
+          isCurrentCycle ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2 lg:grid-cols-3"
+        )}
+      >
         <KpiHero
           label="Pago no ciclo"
           value={kpi.month}
@@ -262,12 +289,14 @@ export function DashboardView(p: DProps) {
           deltaPositive={monthDeltaPositive}
           deltaCaption={`vs ${formatBRL(monthBar.lastMonth)} ciclo anterior`}
         />
-        <KpiHero
-          label="Pago hoje"
-          value={kpi.today}
-          icon={<Calendar className="h-4 w-4" />}
-          subtitle="Despesas quitadas hoje"
-        />
+        {isCurrentCycle && (
+          <KpiHero
+            label="Pago hoje"
+            value={kpi.today}
+            icon={<Calendar className="h-4 w-4" />}
+            subtitle="Despesas quitadas hoje"
+          />
+        )}
         <KpiHero
           label="Pendente no ciclo"
           value={kpi.monthPending}
@@ -285,13 +314,18 @@ export function DashboardView(p: DProps) {
       </section>
 
       {/* KPIs detalhados */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiHero
-          label="Vence hoje"
-          value={kpi.todayScheduled}
-          icon={<CalendarClock className="h-4 w-4" />}
-          subtitle="Comprometido (todas as despesas)"
-        />
+      <section className={cn(
+        "grid gap-3",
+        isCurrentCycle ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+      )}>
+        {isCurrentCycle && (
+          <KpiHero
+            label="Vence hoje"
+            value={kpi.todayScheduled}
+            icon={<CalendarClock className="h-4 w-4" />}
+            subtitle="Comprometido (todas as despesas)"
+          />
+        )}
         <KpiHero
           label="Total no mês"
           value={kpi.monthTotal}

@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth/session";
+import { resolveFinancialCycleContext } from "@/lib/data/stats";
 import { db, schema } from "@/lib/db";
 import { desc, eq, isNull, or } from "drizzle-orm";
 import Link from "next/link";
@@ -6,18 +7,29 @@ import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { FinancialCycleNav } from "@/components/financial-cycle-nav";
 import { DespesasList } from "./despesas-list";
-import { getEffectiveStatus } from "@/lib/dates";
+import { getEffectiveStatus, formatDateBRFromISO } from "@/lib/dates";
+import { expenseInCycle } from "@/lib/financial-cycle";
 import { listChildrenByCouple } from "@/lib/data/children";
 
-export default async function DespesasPage() {
+export default async function DespesasPage({
+  searchParams,
+}: { searchParams: Promise<{ ciclo?: string }> }) {
   const s = await getSession();
   if (!s) redirect("/login");
-  const rows = await db
+  const { ciclo } = await searchParams;
+  const cycleCtx = await resolveFinancialCycleContext(s.user.coupleId, ciclo);
+  const { cycle, isCurrentCycle, prevParam, nextParam } = cycleCtx;
+
+  const allRows = await db
     .select()
     .from(schema.expenses)
     .where(eq(schema.expenses.coupleId, s.user.coupleId))
     .orderBy(desc(schema.expenses.dueDate));
+
+  const rows = allRows.filter((r) => expenseInCycle(r.dueDate, cycle));
+
   const cats = await db
     .select()
     .from(schema.categories)
@@ -33,17 +45,31 @@ export default async function DespesasPage() {
     .where(eq(schema.cards.coupleId, s.user.coupleId));
   const children = await listChildrenByCouple(s.user.coupleId);
 
+  const novaHref = ciclo ? `/despesas/nova?ciclo=${ciclo}` : "/despesas/nova";
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Lançamentos"
         title="Despesas"
-        description="Tudo que entra e sai. Filtre por status, categoria, responsável ou cartão."
+        description={
+          <>
+            Ciclo {cycle.label} ({formatDateBRFromISO(cycle.startDate)} a{" "}
+            {formatDateBRFromISO(cycle.endDate)}). Use os filtros abaixo dentro do período.
+          </>
+        }
         action={
           <Button asChild leftIcon={<Plus className="h-4 w-4" />}>
-            <Link href="/despesas/nova">Nova despesa</Link>
+            <Link href={novaHref}>Nova despesa</Link>
           </Button>
         }
+      />
+      <FinancialCycleNav
+        cycle={cycle}
+        basePath="/despesas"
+        prevParam={prevParam}
+        nextParam={nextParam}
+        isCurrent={isCurrentCycle}
       />
       <DespesasList
         rows={rows.map((r) => ({
@@ -61,11 +87,16 @@ export default async function DespesasPage() {
         }))}
         ctx={{
           cats: cats.map((c) => ({ id: c.id, name: c.name })),
-          cards: cards.map((c) => ({ id: c.id, name: c.name })),
+          cards: cards.map((c) => ({
+            id: c.id,
+            name: c.name,
+            cardKind: c.cardKind ?? "credit",
+          })),
           p1: s.user.couple.person1Label,
           p2: s.user.couple.person2Label,
           children: children.map((c) => ({ id: c.id, name: c.name })),
         }}
+        cycleLabel={cycle.label}
       />
     </div>
   );

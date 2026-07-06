@@ -323,16 +323,19 @@ export async function deleteExpenseAction(id: string) {
   return { ok: true };
 }
 
-export async function markPaidFormAction(formData: FormData) {
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  await markPaidAction(id);
-}
-
-export async function markPaidAction(id: string) {
+export async function markPaidExpenseAction(
+  _prev: { error?: string; ok?: boolean },
+  formData: FormData
+): Promise<{ error?: string; ok?: boolean }> {
   const s = await requireAuth();
-  const t = new Date();
-  const p = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  const id = String(formData.get("id") ?? "");
+  const paymentMethod = String(formData.get("paymentMethod") ?? "");
+  const cardId = (formData.get("cardId") as string) || undefined;
+  const paidAtRaw = String(formData.get("paidAt") ?? "").trim();
+
+  if (!id) return { error: "Despesa inválida" };
+  if (!paymentMethod) return { error: "Selecione a forma de pagamento" };
+
   const [e] = await db
     .select()
     .from(schema.expenses)
@@ -342,16 +345,74 @@ export async function markPaidAction(id: string) {
         eq(schema.expenses.coupleId, s.user.coupleId)
       )
     );
-  if (!e) return;
+  if (!e) return { error: "Despesa não encontrada" };
+  if (e.status === "paid" || e.status === "cancelled") {
+    return { error: "Esta despesa já está quitada ou cancelada" };
+  }
+
   const childTag = responsibleTagForChildUser(s.user);
   if (isChildAccount(s.user)) {
-    if (!childTag || e.responsible !== childTag) return;
+    if (!childTag || e.responsible !== childTag) {
+      return { error: "Sem permissão" };
+    }
   }
+
+  const cardErr = await validateExpenseCardSelection(
+    s.user.coupleId,
+    paymentMethod,
+    cardId
+  );
+  if (cardErr) return { error: cardErr };
+
+  let paidAt: string;
+  if (paidAtRaw) {
+    const parsed = parseDateBR(paidAtRaw);
+    if (!parsed) return { error: "Data de pagamento inválida (use DD/MM/AAAA)" };
+    paidAt = parsed;
+  } else {
+    const t = new Date();
+    paidAt = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  }
+
+  if (paymentMethod === "credit" && cardId) {
+    const [c] = await db
+      .select()
+      .from(schema.cards)
+      .where(
+        and(
+          eq(schema.cards.id, cardId),
+          eq(schema.cards.coupleId, s.user.coupleId)
+        )
+      );
+    if (!c) return { error: "Cartão inválido" };
+  }
+
   await db
     .update(schema.expenses)
-    .set({ status: "paid", paidAt: p, updatedByUserId: s.user.id })
+    .set({
+      status: "paid",
+      paidAt,
+      paymentMethod,
+      cardId: cardId ?? null,
+      updatedByUserId: s.user.id,
+    })
     .where(eq(schema.expenses.id, id));
+
   revalidatePath("/despesas");
   revalidatePath("/");
   revalidatePath("/cartoes");
+  return { ok: true };
+}
+
+/** @deprecated Use markPaidExpenseAction via MarkPaidDialog */
+export async function markPaidFormAction(formData: FormData) {
+  await markPaidExpenseAction({}, formData);
+}
+
+/** @deprecated Use markPaidExpenseAction via MarkPaidDialog */
+export async function markPaidAction(id: string) {
+  const fd = new FormData();
+  fd.set("id", id);
+  fd.set("paymentMethod", "pix");
+  await markPaidExpenseAction({}, fd);
 }

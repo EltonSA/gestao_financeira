@@ -6,10 +6,15 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
+  canMarkExpenseAsPaid,
+  MarkPaidDialog,
+} from "@/components/expenses/mark-paid-button";
+import {
   ExpenseFormFields,
   type ExpenseFormCtx,
   type ExpenseFormDefaults,
 } from "@/components/forms/expense-form-fields";
+import { parseMoneyToCents } from "@/lib/money";
 
 export function EditarDespesaForm({
   expenseId,
@@ -23,6 +28,8 @@ export function EditarDespesaForm({
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [load, setLoad] = useState(false);
+  const canMarkPaid = canMarkExpenseAsPaid(initial.status ?? "pending");
+  const amountCents = parseMoneyToCents(initial.amount ?? "0");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -60,6 +67,25 @@ export function EditarDespesaForm({
         <Button asChild variant="ghost" className="flex-1">
           <Link href="/despesas">Voltar</Link>
         </Button>
+        {canMarkPaid && (
+          <MarkPaidDialog
+            expenseId={expenseId}
+            title={initial.title ?? "Despesa"}
+            amountCents={amountCents}
+            defaultPaymentMethod={initial.paymentMethod ?? "pix"}
+            defaultCardId={initial.cardId}
+            cards={ctx.cards.map((c) => ({
+              id: c.id,
+              name: c.name,
+              cardKind: c.cardKind,
+            }))}
+            showLabel
+            size="sm"
+            variant="soft"
+            triggerClassName="flex-1 w-full"
+            triggerLabel="Marcar como pago"
+          />
+        )}
         <Button type="submit" loading={load} className="flex-1">
           {load ? "Salvando…" : "Atualizar despesa"}
         </Button>
