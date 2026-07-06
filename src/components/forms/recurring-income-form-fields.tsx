@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
-import { CalendarDays, DollarSign, Tag } from "lucide-react";
+import { DollarSign, Tag } from "lucide-react";
 import { childResponsibleValue } from "@/lib/responsible";
+import { MONTH_DAY_OPTIONS } from "@/lib/month-day";
 
 const INS: Record<string, string> = {
   nubank: "Nubank",
@@ -40,6 +42,8 @@ export function RecurringIncomeFormFields({
   defaults?: RecurringIncomeFormDefaults;
 }) {
   const d = defaults ?? {};
+  const [dayOfMonth, setDayOfMonth] = useState(d.dayOfMonth ?? "5");
+
   return (
     <div className="space-y-4">
       <Field label="Título">
@@ -65,16 +69,19 @@ export function RecurringIncomeFormFields({
             leftIcon={<DollarSign className="h-4 w-4" />}
           />
         </Field>
-        <Field label="Dia do recebimento" hint="Todo mês neste dia">
-          <Input
+        <Field label="Recebimento" hint="Todo mês no mesmo dia">
+          <Select
             name="dayOfMonth"
-            type="number"
-            min={1}
-            max={31}
             required
-            defaultValue={d.dayOfMonth ?? "5"}
-            leftIcon={<CalendarDays className="h-4 w-4" />}
-          />
+            value={dayOfMonth}
+            onChange={(e) => setDayOfMonth(e.target.value)}
+          >
+            {MONTH_DAY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
         </Field>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">

@@ -5,6 +5,7 @@ import { Field, Input, Select } from "@/components/ui/input";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import { childResponsibleValue } from "@/lib/responsible";
 import { cardSupportsCredit, cardSupportsDebit } from "@/lib/cardKind";
+import { MONTH_DAY_OPTIONS } from "@/lib/month-day";
 
 export type RecurringFormCtx = {
   cats: { id: string; name: string }[];
@@ -41,6 +42,7 @@ export function RecurringFormFields({
   );
   const [pm, setPm] = useState(d.paymentMethod ?? "pix");
   const [cardId, setCardId] = useState(d.cardId ?? "");
+  const [dayOfMonth, setDayOfMonth] = useState(d.dayOfMonth ?? "10");
 
   useEffect(() => {
     const pool =
@@ -69,16 +71,19 @@ export function RecurringFormFields({
             defaultValue={d.amount}
           />
         </Field>
-        <Field label="Dia do mês" hint="Vencimento mensal">
-          <Input
+        <Field label="Vencimento" hint="Todo mês no mesmo dia">
+          <Select
             name="dayOfMonth"
-            type="number"
-            min="1"
-            max="31"
             required
-            placeholder="10"
-            defaultValue={d.dayOfMonth}
-          />
+            value={dayOfMonth}
+            onChange={(e) => setDayOfMonth(e.target.value)}
+          >
+            {MONTH_DAY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
         </Field>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">

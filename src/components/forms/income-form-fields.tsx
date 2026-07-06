@@ -55,6 +55,8 @@ export function IncomeFormFields({
   const [receivedDay, setReceivedDay] = useState(d.receivedDayOfMonth ?? "5");
 
   const isInstallmentPlan = mode === "create" && incomeType === "installment";
+  const isRecurringPlan = mode === "create" && incomeType === "recurring";
+  const useDayOfMonthReceived = isInstallmentPlan || isRecurringPlan;
 
   const handleIncomeTypeChange = (value: string) => {
     setIncomeType(value);
@@ -65,9 +67,9 @@ export function IncomeFormFields({
 
   const firstParcelPreview = useMemo(() => {
     const day = Number(receivedDay);
-    if (!isInstallmentPlan || day < 1 || day > 31) return null;
+    if (!useDayOfMonthReceived || day < 1 || day > 31) return null;
     return formatDateBRFromISO(firstInstallmentDueDate(day));
-  }, [isInstallmentPlan, receivedDay]);
+  }, [useDayOfMonthReceived, receivedDay]);
 
   return (
     <div className="space-y-6">
@@ -151,13 +153,17 @@ export function IncomeFormFields({
               leftIcon={<DollarSign className="h-4 w-4" />}
             />
           </Field>
-          {isInstallmentPlan ? (
+          {useDayOfMonthReceived ? (
             <Field
-              label="Recebimento das parcelas"
+              label={isInstallmentPlan ? "Recebimento das parcelas" : "Recebimento mensal"}
               hint={
                 firstParcelPreview
-                  ? `${monthDayLabel(Number(receivedDay))} · 1ª em ${firstParcelPreview}, depois todo mês no mesmo dia`
-                  : "Cada parcela cai no mesmo dia de cada mês"
+                  ? isInstallmentPlan
+                    ? `${monthDayLabel(Number(receivedDay))} · 1ª em ${firstParcelPreview}, depois todo mês no mesmo dia`
+                    : `${monthDayLabel(Number(receivedDay))} · próximo em ${firstParcelPreview}, depois todo mês no mesmo dia`
+                  : isInstallmentPlan
+                    ? "Cada parcela cai no mesmo dia de cada mês"
+                    : "Recebe todo mês no mesmo dia"
               }
             >
               <Select

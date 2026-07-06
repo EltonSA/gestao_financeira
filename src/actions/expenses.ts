@@ -79,14 +79,16 @@ export async function createExpenseAction(formData: FormData) {
       : 1;
 
   let due: string | null;
-  if (d.expenseType === "installment") {
+  if (d.expenseType === "installment" || d.recurrence === "monthly") {
     const day =
       d.dueDayOfMonth ??
       parseDayOfMonthInput(String(formData.get("dueDayOfMonth") ?? "")) ??
       parseDayOfMonthInput(d.dueDate);
     if (!day) {
       return {
-        error: "Selecione o vencimento das parcelas (Todo dia 01, 02, 03…)",
+        error: d.expenseType === "installment"
+          ? "Selecione o vencimento das parcelas (Todo dia 01, 02, 03…)"
+          : "Selecione o vencimento mensal (Todo dia 01, 02, 03…)",
       };
     }
     due = firstInstallmentDueDate(day);

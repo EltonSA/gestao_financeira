@@ -67,14 +67,16 @@ export async function createIncomeAction(formData: FormData) {
       : 1;
 
   let received: string | null;
-  if (d.incomeType === "installment") {
+  if (d.incomeType === "installment" || d.incomeType === "recurring") {
     const day =
       d.receivedDayOfMonth ??
       parseDayOfMonthInput(String(formData.get("receivedDayOfMonth") ?? "")) ??
       parseDayOfMonthInput(d.receivedDate);
     if (!day) {
       return {
-        error: "Selecione o recebimento das parcelas (Todo dia 01, 02, 03…)",
+        error: d.incomeType === "installment"
+          ? "Selecione o recebimento das parcelas (Todo dia 01, 02, 03…)"
+          : "Selecione o recebimento mensal (Todo dia 01, 02, 03…)",
       };
     }
     received = firstInstallmentDueDate(day);

@@ -88,12 +88,15 @@ export function ExpenseFormFields({
   const [pm, setPm] = useState(d.paymentMethod ?? "credit");
   const [cardId, setCardId] = useState(d.cardId ?? "");
   const [expenseType, setExpenseType] = useState(d.expenseType ?? "variable");
+  const [recurrence, setRecurrence] = useState(d.recurrence ?? "none");
   const [installments, setInstallments] = useState(
     Number(d.installments ?? (d.expenseType === "installment" ? 2 : 1)) || 1
   );
   const [dueDay, setDueDay] = useState(d.dueDayOfMonth ?? "10");
 
   const isInstallmentPlan = mode === "create" && expenseType === "installment";
+  const isMonthlyRecurring = mode === "create" && recurrence === "monthly";
+  const useDayOfMonthDue = isInstallmentPlan || isMonthlyRecurring;
 
   const handleExpenseTypeChange = (value: string) => {
     setExpenseType(value);
@@ -104,9 +107,9 @@ export function ExpenseFormFields({
 
   const firstParcelPreview = useMemo(() => {
     const day = Number(dueDay);
-    if (!isInstallmentPlan || day < 1 || day > 31) return null;
+    if (!useDayOfMonthDue || day < 1 || day > 31) return null;
     return formatDateBRFromISO(firstInstallmentDueDate(day));
-  }, [isInstallmentPlan, dueDay]);
+  }, [useDayOfMonthDue, dueDay]);
 
   useEffect(() => {
     const pool =
@@ -220,13 +223,17 @@ export function ExpenseFormFields({
               leftIcon={<DollarSign className="h-4 w-4" />}
             />
           </Field>
-          {isInstallmentPlan ? (
+          {useDayOfMonthDue ? (
             <Field
-              label="Vencimento das parcelas"
+              label={isInstallmentPlan ? "Vencimento das parcelas" : "Vencimento mensal"}
               hint={
                 firstParcelPreview
-                  ? `${monthDayLabel(Number(dueDay))} · 1ª em ${firstParcelPreview}, depois todo mês no mesmo dia`
-                  : "Cada parcela vence no mesmo dia de cada mês"
+                  ? isInstallmentPlan
+                    ? `${monthDayLabel(Number(dueDay))} · 1ª em ${firstParcelPreview}, depois todo mês no mesmo dia`
+                    : `${monthDayLabel(Number(dueDay))} · próximo em ${firstParcelPreview}, depois todo mês no mesmo dia`
+                  : isInstallmentPlan
+                    ? "Cada parcela vence no mesmo dia de cada mês"
+                    : "Vence todo mês no mesmo dia"
               }
             >
               <Select
@@ -308,7 +315,11 @@ export function ExpenseFormFields({
             </Select>
           </Field>
           <Field label="Recorrência" hint="Mensal + tipo Fixa cria também um modelo em Recorrentes">
-            <Select name="recurrence" defaultValue={d.recurrence ?? "none"}>
+            <Select
+              name="recurrence"
+              value={recurrence}
+              onChange={(e) => setRecurrence(e.target.value)}
+            >
               <option value="none">Única (só este lançamento)</option>
               <option value="monthly">Mensal (repete todo mês)</option>
               <option value="weekly">Semanal</option>
