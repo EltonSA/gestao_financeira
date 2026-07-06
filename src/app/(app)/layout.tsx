@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth/session";
 import { syncOverdueForCouple } from "@/lib/syncOverdue";
 import { syncRecurringForCouple } from "@/lib/services/recurringSync";
 import { syncRecurringIncomesForCouple } from "@/lib/services/recurringIncomeSync";
+import { syncCardInvoicesForCouple } from "@/lib/services/cardInvoice";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { isChildAccount } from "@/lib/auth/member";
@@ -19,6 +20,7 @@ export default async function AppLayout({
   if (!isChildAccount(s.user)) {
     await syncRecurringForCouple(s.user.coupleId);
     await syncRecurringIncomesForCouple(s.user.coupleId);
+    await syncCardInvoicesForCouple(s.user.coupleId);
   }
   let childAccountLabel: string | null = null;
   if (isChildAccount(s.user) && s.user.linkedChildId) {

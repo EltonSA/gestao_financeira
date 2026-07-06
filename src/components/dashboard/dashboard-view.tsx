@@ -46,6 +46,12 @@ import { cn } from "@/lib/utils";
 export type InsightP = { id: string; message: string; severity: string };
 export type DProps = {
   userName: string;
+  financialCycle: { startDate: string; endDate: string; label: string };
+  realBalance: {
+    totalIncomesCents: number;
+    paidNonCreditExpensesCents: number;
+    realBalanceCents: number;
+  };
   kpi: {
     today: number;
     todayScheduled: number;
@@ -56,12 +62,13 @@ export type DProps = {
     monthTotal: number;
     monthFixed: number;
     monthVariableApprox: number;
+    cycleIncomes: number;
   };
   walletAgg: {
-    incomeOnCards: number;
     creditUsed: number;
-    effectiveCreditAvail: number;
-    totalDisponivelCartoes: number;
+    creditAvail: number;
+    currentInvoice: number;
+    invoiceOutstanding: number;
     debitUsedOnCards: number;
     creditLimitTracked: number;
   };
@@ -99,14 +106,13 @@ export type DProps = {
     limit: number;
     available: number;
     percent: number;
-    incomeOnCard: number;
     debitUsedOnCard: number;
-    totalDisponivel: number;
-    liquidAfterDebit: number;
+    currentInvoice: number;
+    invoiceOutstanding: number;
   }[];
   totLimit: number;
   totAvail: number;
-  totDisponivelCartoes: number;
+  totInvoice: number;
   topCat: { name: string; c: number } | null;
   topCard: { name: string; c: number } | null;
   insights: InsightP[];
@@ -131,6 +137,8 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 export function DashboardView(p: DProps) {
   const {
     userName,
+    financialCycle,
+    realBalance,
     kpi,
     walletAgg,
     forecast,
@@ -141,7 +149,7 @@ export function DashboardView(p: DProps) {
     recurring,
     totLimit,
     totAvail,
-    totDisponivelCartoes,
+    totInvoice,
     topCat,
     topCard,
     insights,
@@ -193,20 +201,66 @@ export function DashboardView(p: DProps) {
           {greeting}, <span className="text-[var(--primary)]">{userName.split(" ")[0]}</span>.
         </h1>
         <p className="text-[15px] text-[var(--foreground-muted)] leading-relaxed">
-          Panorama do mês, cartões com entradas e crédito, e previsões com base no ritmo de gastos.
+          Ciclo {financialCycle.label} ({financialCycle.startDate.slice(8, 10)}/{financialCycle.startDate.slice(5, 7)} a{" "}
+          {financialCycle.endDate.slice(8, 10)}/{financialCycle.endDate.slice(5, 7)}). Saldo real separado do limite de cartão.
         </p>
+      </section>
+
+      {/* Saldo real + cartões */}
+      <section className="grid lg:grid-cols-2 gap-4">
+        <Card className="border-[var(--success)]/20 bg-[var(--success-bg)]/30">
+          <CardContent className="p-5">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-muted)]">Saldo disponível</p>
+            <p className="mt-2 text-3xl font-semibold tabular text-[var(--foreground)]">
+              {formatBRL(realBalance.realBalanceCents)}
+            </p>
+            <p className="mt-2 text-xs text-[var(--foreground-muted)]">
+              Entradas {formatBRL(realBalance.totalIncomesCents)} − despesas e faturas pagas{" "}
+              {formatBRL(realBalance.paidNonCreditExpensesCents)}
+            </p>
+            <p className="mt-1 text-xs text-[var(--foreground-muted)]">
+              Entradas no ciclo: {formatBRL(kpi.cycleIncomes)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-muted)]">Cartões de crédito</p>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-[var(--foreground-muted)] text-xs">Limite total</p>
+                <p className="font-semibold tabular">{formatBRL(totLimit)}</p>
+              </div>
+              <div>
+                <p className="text-[var(--foreground-muted)] text-xs">Usado (em aberto)</p>
+                <p className="font-semibold tabular text-[var(--warning-strong)]">{formatBRL(walletAgg.creditUsed)}</p>
+              </div>
+              <div>
+                <p className="text-[var(--foreground-muted)] text-xs">Disponível no cartão</p>
+                <p className="font-semibold tabular text-[var(--success-strong)]">{formatBRL(totAvail)}</p>
+              </div>
+              <div>
+                <p className="text-[var(--foreground-muted)] text-xs">Fatura atual</p>
+                <p className="font-semibold tabular">{formatBRL(totInvoice)}</p>
+              </div>
+            </div>
+            <p className="text-[11px] text-[var(--foreground-subtle)]">
+              Limite e fatura não somam ao saldo da família.
+            </p>
+          </CardContent>
+        </Card>
       </section>
 
       {/* KPIs principais */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiHero
-          label="Pago no mês"
+          label="Pago no ciclo"
           value={kpi.month}
           tone="primary"
           icon={<Wallet className="h-4 w-4" />}
           delta={monthDelta}
           deltaPositive={monthDeltaPositive}
-          deltaCaption={`vs ${formatBRL(monthBar.lastMonth)} mês anterior`}
+          deltaCaption={`vs ${formatBRL(monthBar.lastMonth)} ciclo anterior`}
         />
         <KpiHero
           label="Pago hoje"
@@ -215,27 +269,23 @@ export function DashboardView(p: DProps) {
           subtitle="Despesas quitadas hoje"
         />
         <KpiHero
-          label="Pendente no mês"
+          label="Pendente no ciclo"
           value={kpi.monthPending}
           tone={kpi.monthPending > 0 ? "warning" : undefined}
           icon={<AlertCircle className="h-4 w-4" />}
-          subtitle="Ainda a pagar (vence no mês)"
+          subtitle="Ainda a pagar neste ciclo"
         />
         <KpiHero
-          label="Disponível nos cartões"
-          value={totDisponivelCartoes}
-          tone="success"
-          icon={<CreditCardIcon className="h-4 w-4" />}
-          subtitle={
-            totLimit
-              ? `Crédito efetivo ${formatBRL(totAvail)} · entradas nos cartões ${formatBRL(walletAgg.incomeOnCards)}`
-              : "Linha + caixa nos cartões ativos"
-          }
+          label="Saldo real"
+          value={realBalance.realBalanceCents}
+          tone={realBalance.realBalanceCents >= 0 ? "success" : "danger"}
+          icon={<Banknote className="h-4 w-4" />}
+          subtitle="Dinheiro disponível (sem limite de cartão)"
         />
       </section>
 
       {/* KPIs detalhados */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiHero
           label="Vence hoje"
           value={kpi.todayScheduled}
@@ -258,21 +308,14 @@ export function DashboardView(p: DProps) {
           label="Usado no crédito"
           value={walletAgg.creditUsed}
           icon={<CreditCardIcon className="h-4 w-4" />}
-          subtitle="Soma nos cartões (fatura)"
+          subtitle="Fatura em aberto (não é saldo)"
         />
         <KpiHero
-          label="Crédito disponível"
-          value={walletAgg.effectiveCreditAvail}
+          label="Limite disponível"
+          value={walletAgg.creditAvail}
           tone="success"
           icon={<TrendingUp className="h-4 w-4" />}
-          subtitle={`Limite rastreado ${formatBRL(walletAgg.creditLimitTracked)}`}
-        />
-        <KpiHero
-          label="Entradas nos cartões"
-          value={walletAgg.incomeOnCards}
-          tone="primary"
-          icon={<Banknote className="h-4 w-4" />}
-          subtitle="Soma das entradas vinculadas"
+          subtitle={`Limite total ${formatBRL(walletAgg.creditLimitTracked)}`}
         />
       </section>
 
@@ -546,10 +589,10 @@ export function DashboardView(p: DProps) {
         <section className="space-y-3">
           <div className="flex items-end justify-between">
             <div>
-              <h2 className="h2">Cartões: crédito, entradas e total disponível</h2>
+              <h2 className="h2">Cartões de crédito</h2>
               <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
-                Limite de crédito rastreado {formatBRL(totLimit)} · crédito disponível (efetivo){" "}
-                {formatBRL(totAvail)} · total disponível (crédito + caixa) {formatBRL(totDisponivelCartoes)}
+                Limite {formatBRL(totLimit)} · em aberto {formatBRL(walletAgg.creditUsed)} · disponível no cartão{" "}
+                {formatBRL(totAvail)} · fatura do ciclo {formatBRL(totInvoice)}
               </p>
             </div>
             <Link href="/cartoes" className="text-xs font-semibold text-[var(--primary)] hover:underline inline-flex items-center gap-1">
@@ -595,12 +638,12 @@ export function DashboardView(p: DProps) {
                   )}
                   <dl className="space-y-1.5 text-[11px]">
                     <div className="flex justify-between gap-2">
-                      <dt className="text-[var(--foreground-muted)]">Crédito disponível</dt>
+                      <dt className="text-[var(--foreground-muted)]">Limite disponível</dt>
                       <dd className="tabular font-medium text-[var(--foreground)]">{formatBRL(row.available)}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <dt className="text-[var(--foreground-muted)]">Entradas no cartão</dt>
-                      <dd className="tabular font-medium text-[var(--foreground)]">{formatBRL(row.incomeOnCard)}</dd>
+                      <dt className="text-[var(--foreground-muted)]">Fatura atual</dt>
+                      <dd className="tabular font-medium text-[var(--foreground)]">{formatBRL(row.currentInvoice)}</dd>
                     </div>
                     {row.debitUsedOnCard > 0 && (
                       <div className="flex justify-between gap-2">
@@ -608,13 +651,9 @@ export function DashboardView(p: DProps) {
                         <dd className="tabular font-medium text-[var(--foreground)]">{formatBRL(row.debitUsedOnCard)}</dd>
                       </div>
                     )}
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-[var(--foreground-muted)]">Caixa após débito</dt>
-                      <dd className="tabular font-medium text-[var(--foreground)]">{formatBRL(row.liquidAfterDebit)}</dd>
-                    </div>
                     <div className="flex justify-between gap-2 pt-1.5 border-t border-[var(--border-subtle)] items-baseline">
-                      <dt className="text-[var(--foreground-muted)] font-medium">Total disponível</dt>
-                      <dd className="tabular font-semibold text-[var(--success-strong)] text-sm">{formatBRL(row.totalDisponivel)}</dd>
+                      <dt className="text-[var(--foreground-muted)] font-medium">Em aberto</dt>
+                      <dd className="tabular font-semibold text-[var(--warning-strong)] text-sm">{formatBRL(row.used)}</dd>
                     </div>
                   </dl>
                 </Card>

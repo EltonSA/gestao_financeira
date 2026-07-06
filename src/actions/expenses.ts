@@ -8,7 +8,7 @@ import { assertResponsibleBelongsToCouple } from "@/lib/data/children";
 import { getCardUsedCents } from "@/lib/services/cardLimit";
 import { validateExpenseCardSelection } from "@/lib/expenseCardGuard";
 import { createRecurringTemplateFromExpense } from "@/lib/services/recurringSync";
-import { parseDateBR } from "@/lib/dates";
+import { parseDateBR, firstInstallmentDueDate, parseDayOfMonthInput } from "@/lib/dates";
 import { parseMoneyToCents } from "@/lib/money";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -19,7 +19,7 @@ const expenseForm = z.object({
   description: z.string().optional(),
   categoryId: z.string().min(1),
   amount: z.string().min(1),
-  dueDate: z.string().min(1),
+  dueDate: z.string().optional(),
   paidAt: z.string().optional(),
   paymentMethod: z.string().min(1),
   cardId: z.string().optional(),
@@ -28,6 +28,7 @@ const expenseForm = z.object({
   status: z.enum(["pending", "paid", "overdue", "cancelled"]),
   recurrence: z.enum(["none", "weekly", "monthly", "yearly"]),
   installments: z.coerce.number().int().min(1).max(60).optional(),
+  dueDayOfMonth: z.coerce.number().int().min(1).max(31).optional(),
 });
 
 function normalizePaidAt(
@@ -60,6 +61,7 @@ export async function createExpenseAction(formData: FormData) {
     status: formData.get("status"),
     recurrence: formData.get("recurrence") ?? "none",
     installments: formData.get("installments") || 1,
+    dueDayOfMonth: formData.get("dueDayOfMonth") || undefined,
   });
   if (!r.success) return { error: "Dados inválidos" };
   const d = r.data;
@@ -70,8 +72,29 @@ export async function createExpenseAction(formData: FormData) {
   } else if (!(await assertResponsibleBelongsToCouple(s.user.coupleId, d.responsible))) {
     return { error: "Responsável inválido" };
   }
-  const due = parseDateBR(d.dueDate);
-  if (!due) return { error: "Data de vencimento inválida (use DD/MM/AAAA)" };
+
+  const inst =
+    d.expenseType === "installment"
+      ? Math.max(2, d.installments && d.installments > 1 ? d.installments : 2)
+      : 1;
+
+  let due: string | null;
+  if (d.expenseType === "installment") {
+    const day =
+      d.dueDayOfMonth ??
+      parseDayOfMonthInput(String(formData.get("dueDayOfMonth") ?? "")) ??
+      parseDayOfMonthInput(d.dueDate);
+    if (!day) {
+      return {
+        error: "Selecione o vencimento das parcelas (Todo dia 01, 02, 03…)",
+      };
+    }
+    due = firstInstallmentDueDate(day);
+  } else {
+    due = parseDateBR(d.dueDate ?? "");
+    if (!due) return { error: "Data de vencimento inválida (use DD/MM/AAAA)" };
+  }
+
   const amountCents = parseMoneyToCents(d.amount);
   if (amountCents <= 0) return { error: "Informe o valor" };
 
@@ -93,9 +116,6 @@ export async function createExpenseAction(formData: FormData) {
         )
       );
     if (!c) return { error: "Cartão inválido" };
-    const inst = d.expenseType === "installment" && d.installments && d.installments > 1
-      ? d.installments
-      : 1;
     const per = Math.ceil(amountCents / inst);
     const used = await getCardUsedCents(s.user.coupleId, d.cardId);
     if (c.limitTotalCents < used + per) {
@@ -104,10 +124,6 @@ export async function createExpenseAction(formData: FormData) {
   }
 
   const paidAt = normalizePaidAt(d.status, d.paidAt);
-  const inst =
-    d.expenseType === "installment" && d.installments && d.installments > 1
-      ? d.installments
-      : 1;
   const group = inst > 1 ? crypto.randomUUID() : null;
 
   let recurringTemplateId: string | null = null;
@@ -213,7 +229,7 @@ export async function updateExpenseAction(id: string, formData: FormData) {
   if (!childTag && !(await assertResponsibleBelongsToCouple(s.user.coupleId, d.responsible))) {
     return { error: "Responsável inválido" };
   }
-  const due = parseDateBR(d.dueDate);
+  const due = parseDateBR(d.dueDate ?? "");
   if (!due) return { error: "Data de vencimento inválida" };
   const amountCents = parseMoneyToCents(d.amount);
   const cardErrU = await validateExpenseCardSelection(

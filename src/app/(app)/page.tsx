@@ -33,16 +33,17 @@ export default async function DashboardPage() {
     cardKind: w.card.cardKind,
     used: w.creditUsedCents,
     limit: w.creditLimitCents,
-    available: w.effectiveCreditAvailableCents,
+    available: w.creditAvailableCents,
     percent: w.percent,
-    incomeOnCard: w.incomeOnCardCents,
     debitUsedOnCard: w.debitUsedOnCardCents,
-    totalDisponivel: w.totalDisponivelCartaoCents,
-    liquidAfterDebit: w.liquidAfterDebitCents,
+    currentInvoice: w.currentInvoiceCents,
+    invoiceOutstanding: w.currentInvoiceOutstandingCents,
   }));
   return (
     <DashboardView
       userName={s.user.name}
+      financialCycle={data.financialCycle}
+      realBalance={data.realBalance}
       kpi={data.kpi}
       walletAgg={data.walletAgg}
       forecast={data.forecast}
@@ -61,8 +62,8 @@ export default async function DashboardPage() {
       recurring={data.recurring}
       cardItems={cardItems}
       totLimit={data.walletAgg.creditLimitTracked || data.cards.totLimit}
-      totAvail={data.walletAgg.effectiveCreditAvail}
-      totDisponivelCartoes={data.walletAgg.totalDisponivelCartoes}
+      totAvail={data.walletAgg.creditAvail}
+      totInvoice={data.walletAgg.currentInvoice}
       topCat={data.categories.top}
       topCard={
         data.cards.top

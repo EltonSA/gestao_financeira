@@ -2,46 +2,69 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getEffectiveStatus } from "@/lib/dates";
-import { endOfMonth, startOfMonth, subDays, subMonths, addDays } from "date-fns";
+import { subDays, addDays } from "date-fns";
 import { getAllCardsUsage } from "@/lib/services/cardLimit";
 import { getCardWalletSummaries } from "@/lib/services/cardWallet";
+import { getRealBalanceBreakdown } from "@/lib/services/realBalance";
 import { cardSupportsCredit } from "@/lib/cardKind";
 import { runInsights } from "@/lib/insights/engine";
+import {
+  coupleToFinancialSettings,
+  getFinancialCycleForDate,
+  getPreviousFinancialCycle,
+  daysInCycle,
+  dayOfCycle,
+  daysLeftInCycle,
+  ymdFromDate,
+  type FinancialCycleRange,
+} from "@/lib/financial-cycle";
 
-function ymd(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function inCycle(iso: string, cycle: FinancialCycleRange) {
+  return iso >= cycle.startDate && iso <= cycle.endDate;
 }
 
-function monthRange(y: number, m: number) {
-  const s = startOfMonth(new Date(y, m - 1, 1));
-  const e = endOfMonth(new Date(y, m - 1, 1));
-  return { s: ymd(s), e: ymd(e) };
+export async function getCoupleFinancialSettings(coupleId: string) {
+  const [c] = await db
+    .select()
+    .from(schema.couples)
+    .where(eq(schema.couples.id, coupleId));
+  if (!c) {
+    return coupleToFinancialSettings({
+      financialCycleStartType: "fixed_day",
+      financialCycleStartDay: 1,
+      financialCycleBusinessDayNumber: 5,
+    });
+  }
+  return coupleToFinancialSettings(c);
 }
 
 export async function getDashboardData(coupleId: string) {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth() + 1;
-  const { s: mStart, e: mEnd } = monthRange(y, m);
-  const prevD = subMonths(new Date(y, m - 1, 1), 1);
-  const py = prevD.getFullYear();
-  const pm = prevD.getMonth() + 1;
-  const { s: pStart, e: pEnd } = monthRange(py, pm);
-  const tStr = ymd(now);
+  const settings = await getCoupleFinancialSettings(coupleId);
+  const cycle = getFinancialCycleForDate(now, settings);
+  const prevCycle = getPreviousFinancialCycle(cycle, settings);
+  const tStr = ymdFromDate(now);
   const d7 = subDays(now, 6);
-  const d7s = ymd(d7);
+  const d7s = ymdFromDate(d7);
 
   const allEx = await db
     .select()
     .from(schema.expenses)
     .where(eq(schema.expenses.coupleId, coupleId));
 
-  const exMonth = allEx.filter(
-    (e) => e.dueDate >= mStart && e.dueDate <= mEnd && e.status !== "cancelled"
+  const allIn = await db
+    .select()
+    .from(schema.incomes)
+    .where(eq(schema.incomes.coupleId, coupleId));
+
+  const exCycle = allEx.filter(
+    (e) => inCycle(e.dueDate, cycle) && e.status !== "cancelled"
   );
   const exPrev = allEx.filter(
-    (e) => e.dueDate >= pStart && e.dueDate <= pEnd && e.status === "paid"
+    (e) => inCycle(e.dueDate, prevCycle) && e.status === "paid"
   );
+
+  const inCycleIncomes = allIn.filter((i) => inCycle(i.receivedDate, cycle));
 
   let todayPaid = 0;
   let todayExpenseAll = 0;
@@ -58,33 +81,31 @@ export async function getDashboardData(coupleId: string) {
     }
   }
 
-  const monthPaid = exMonth.filter((e) => e.status === "paid");
-  const monthPend = exMonth.filter((e) => e.status === "pending");
-  const monthOver = exMonth.filter(
+  const cyclePaid = exCycle.filter((e) => e.status === "paid");
+  const cyclePend = exCycle.filter((e) => e.status === "pending");
+  const cycleOver = exCycle.filter(
     (e) => e.status === "overdue" || getEffectiveStatus(e.dueDate, e.status) === "overdue"
   );
-  const sumP = (a: typeof exMonth) => a.reduce((x, e) => x + e.amountCents, 0);
+  const sumP = (a: typeof exCycle) => a.reduce((x, e) => x + e.amountCents, 0);
 
   const byCat: Record<string, number> = {};
-  for (const e of exMonth) {
+  for (const e of exCycle) {
     if (e.status === "cancelled") continue;
     byCat[e.categoryId] = (byCat[e.categoryId] ?? 0) + e.amountCents;
   }
-  const cats = await db
-    .select()
-    .from(schema.categories);
+  const cats = await db.select().from(schema.categories);
   const catName = (id: string) => cats.find((c) => c.id === id)?.name ?? "—";
   const topCat = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];
 
   const byPerson: Record<string, number> = { person1: 0, person2: 0, both: 0 };
-  for (const e of exMonth) {
+  for (const e of exCycle) {
     if (e.status === "cancelled") continue;
     const k = e.responsible;
     byPerson[k] = (byPerson[k] ?? 0) + e.amountCents;
   }
 
   const byCard: Record<string, number> = {};
-  for (const e of exMonth) {
+  for (const e of exCycle) {
     if (e.status === "cancelled" || !e.cardId) continue;
     byCard[e.cardId] = (byCard[e.cardId] ?? 0) + e.amountCents;
   }
@@ -97,26 +118,24 @@ export async function getDashboardData(coupleId: string) {
 
   const cardUsage = await getAllCardsUsage(coupleId);
   const cardWallets = await getCardWalletSummaries(coupleId);
-  const totLimit = cRows
-    .filter((c) => c.isActive)
-    .reduce((a, c) => a + c.limitTotalCents, 0);
-  const totAvail = cardUsage.reduce((a, r) => a + r.available, 0);
-  const totUsed = cardUsage.reduce((a, r) => a + r.used, 0);
+  const realBalance = await getRealBalanceBreakdown(coupleId);
 
   const walletAgg = cardWallets.reduce(
     (a, w) => ({
-      incomeOnCards: a.incomeOnCards + w.incomeOnCardCents,
       creditUsed: a.creditUsed + w.creditUsedCents,
-      effectiveCreditAvail: a.effectiveCreditAvail + w.effectiveCreditAvailableCents,
-      totalDisponivelCartoes: a.totalDisponivelCartoes + w.totalDisponivelCartaoCents,
+      creditAvail: a.creditAvail + w.creditAvailableCents,
+      currentInvoice: a.currentInvoice + w.currentInvoiceCents,
+      invoiceOutstanding: a.invoiceOutstanding + w.currentInvoiceOutstandingCents,
       debitUsedOnCards: a.debitUsedOnCards + w.debitUsedOnCardCents,
-      creditLimitTracked: a.creditLimitTracked + (cardSupportsCredit(w.card.cardKind) ? w.creditLimitCents : 0),
+      creditLimitTracked:
+        a.creditLimitTracked +
+        (cardSupportsCredit(w.card.cardKind) ? w.creditLimitCents : 0),
     }),
     {
-      incomeOnCards: 0,
       creditUsed: 0,
-      effectiveCreditAvail: 0,
-      totalDisponivelCartoes: 0,
+      creditAvail: 0,
+      currentInvoice: 0,
+      invoiceOutstanding: 0,
       debitUsedOnCards: 0,
       creditLimitTracked: 0,
     }
@@ -133,7 +152,7 @@ export async function getDashboardData(coupleId: string) {
     );
   const fixedMonthlyCents = recs.reduce((s, r) => s + r.amountCents, 0);
 
-  const horizon = ymd(addDays(now, 14));
+  const horizon = ymdFromDate(addDays(now, 14));
   let upcoming14Cents = 0;
   let upcoming14Count = 0;
   for (const e of allEx) {
@@ -147,58 +166,69 @@ export async function getDashboardData(coupleId: string) {
   }
 
   const prevTotal = sumP(exPrev);
+  const csum = sumP(cyclePaid);
+  const cycleIncomeTotal = inCycleIncomes.reduce((a, i) => a + i.amountCents, 0);
 
   const goals = await db
     .select()
     .from(schema.goals)
     .where(eq(schema.goals.coupleId, coupleId));
-  const dom = now.getDate();
-  const csum = sumP(monthPaid);
-  const lastDay = endOfMonth(now).getDate();
-  const avg = dom > 0 ? csum / dom : 0;
-  const proj = dom > 0 ? (csum / dom) * lastDay : 0;
-  const pendingSum = monthPend.reduce((a, b) => a + b.amountCents, 0);
-  const overSum = monthOver.reduce((a, b) => a + b.amountCents, 0);
 
-  const monthTotalAll = sumP(exMonth);
-  const monthVariableApprox = Math.max(0, monthTotalAll - fixedMonthlyCents);
+  const dom = dayOfCycle(now, cycle);
+  const cycleDays = daysInCycle(cycle);
+  const daysLeft = daysLeftInCycle(now, cycle);
+  const avg = dom > 0 ? csum / dom : 0;
+  const proj = dom > 0 ? (csum / dom) * cycleDays : 0;
+  const pendingSum = cyclePend.reduce((a, b) => a + b.amountCents, 0);
+  const overSum = cycleOver.reduce((a, b) => a + b.amountCents, 0);
+
+  const cycleTotalAll = sumP(exCycle);
+  const cycleVariableApprox = Math.max(0, cycleTotalAll - fixedMonthlyCents);
   const burnRate = dom > 0 ? csum / dom : 0;
-  const projPaidMonthEnd = Math.round(burnRate * lastDay);
-  const projCommitMonthEnd = Math.round((monthTotalAll / Math.max(1, dom)) * lastDay);
+  const projPaidCycleEnd = Math.round(burnRate * cycleDays);
+  const projCommitCycleEnd = Math.round((cycleTotalAll / Math.max(1, dom)) * cycleDays);
 
   const daySeries: { d: string; c: number }[] = [];
   for (let i = 0; i < 7; i++) {
-    const d = ymd(subDays(now, 6 - i));
+    const d = ymdFromDate(subDays(now, 6 - i));
     const v = allEx
-      .filter(
-        (e) => e.paidAt === d && e.status === "paid"
-      )
+      .filter((e) => e.paidAt === d && e.status === "paid")
       .reduce((a, b) => a + b.amountCents, 0);
     daySeries.push({ d, c: v });
   }
 
-  const insights = await runInsights(coupleId);
+  const insights = await runInsights(coupleId, settings, cycle);
 
   return {
+    financialCycle: cycle,
+    realBalance,
     kpi: {
       today: todayPaid,
       todayScheduled: todayExpenseAll,
       last7: day7,
-      month: sumP(monthPaid),
+      month: csum,
       monthPending: pendingSum,
       monthOver: overSum,
-      monthTotal: monthTotalAll,
+      monthTotal: cycleTotalAll,
       monthFixed: fixedMonthlyCents,
-      monthVariableApprox,
+      monthVariableApprox: cycleVariableApprox,
+      cycleIncomes: cycleIncomeTotal,
     },
     monthComparison: { current: csum, previous: prevTotal },
-    cards: { totLimit, totAvail, totUsed, items: cardUsage, top: topCard, cardName },
+    cards: {
+      totLimit: walletAgg.creditLimitTracked,
+      totAvail: walletAgg.creditAvail,
+      totUsed: walletAgg.creditUsed,
+      items: cardUsage,
+      top: topCard,
+      cardName,
+    },
     cardWallets,
     walletAgg,
     forecast: {
-      daysLeftInMonth: Math.max(0, lastDay - dom),
-      projPaidMonthEnd,
-      projCommitMonthEnd,
+      daysLeftInMonth: daysLeft,
+      projPaidMonthEnd: projPaidCycleEnd,
+      projCommitMonthEnd: projCommitCycleEnd,
       upcoming14Cents,
       upcoming14Count,
       avgDailyPaid: avg,
@@ -222,7 +252,11 @@ export async function getDashboardData(coupleId: string) {
       thisMonth: csum,
       lastMonth: prevTotal,
     },
-    projection: { avg, proj, estimatedBalance: csum - pendingSum },
+    projection: {
+      avg,
+      proj,
+      estimatedBalance: realBalance.realBalanceCents - pendingSum,
+    },
     insights,
   };
 }

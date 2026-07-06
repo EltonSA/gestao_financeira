@@ -1,9 +1,13 @@
 import { getSession } from "@/lib/auth/session";
+import { getCoupleFinancialSettings } from "@/lib/data/stats";
+import { listOpenInvoicesForCouple } from "@/lib/services/cardInvoice";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { formatBRL } from "@/lib/money";
 import { formatDateBRFromISO, getEffectiveStatus } from "@/lib/dates";
+import { getFinancialCycleForDate } from "@/lib/financial-cycle";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { CalendarDays, CreditCard as CreditCardIcon, PiggyBank } from "lucide-react";
 import { Badge, STATUS_BADGE } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,13 +17,22 @@ import { PageHeader } from "@/components/ui/page-header";
 export default async function CalendarioPage() {
   const s = await getSession();
   if (!s) redirect("/login");
-  const [ex, cards, goals] = await Promise.all([
+  const settings = await getCoupleFinancialSettings(s.user.coupleId);
+  const cycle = getFinancialCycleForDate(new Date(), settings);
+  const [ex, cards, goals, openInvoices] = await Promise.all([
     db.select().from(schema.expenses).where(eq(schema.expenses.coupleId, s.user.coupleId)),
     db.select().from(schema.cards).where(eq(schema.cards.coupleId, s.user.coupleId)),
     db.select().from(schema.goals).where(eq(schema.goals.coupleId, s.user.coupleId)),
+    listOpenInvoicesForCouple(s.user.coupleId),
   ]);
+  const cardById = Object.fromEntries(cards.map((c) => [c.id, c]));
   const upcoming = ex
-    .filter((e) => e.status === "pending" || e.status === "overdue")
+    .filter(
+      (e) =>
+        (e.status === "pending" || e.status === "overdue") &&
+        e.dueDate >= cycle.startDate &&
+        e.dueDate <= cycle.endDate
+    )
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 30);
   const goalsWithDue = goals.filter((g) => g.dueDate);
@@ -29,8 +42,39 @@ export default async function CalendarioPage() {
       <PageHeader
         eyebrow="Agenda"
         title="Calendário financeiro"
-        description="Vencimentos, fechamentos de cartão e prazos de metas em um só lugar."
+        description={`Ciclo ${cycle.label} (${formatDateBRFromISO(cycle.startDate)} a ${formatDateBRFromISO(cycle.endDate)}).`}
       />
+
+      {openInvoices.length > 0 && (
+        <Card className="border-[var(--warning-soft)]">
+          <CardHeader>
+            <CardTitle className="text-base">Faturas em aberto</CardTitle>
+            <CardDescription>Pagamento reduz o saldo real — não o limite total do cartão.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {openInvoices.map((inv) => {
+                const card = cardById[inv.cardId];
+                const open = Math.max(0, inv.totalAmountCents - inv.paidAmountCents);
+                return (
+                  <li key={inv.id} className="flex flex-wrap items-center gap-2 justify-between rounded-xl border border-[var(--border-subtle)] p-3">
+                    <div>
+                      <p className="text-sm font-medium">{card?.name ?? "Cartão"}</p>
+                      <p className="text-[11px] text-[var(--foreground-muted)]">
+                        Vence {formatDateBRFromISO(inv.dueDate)} · {inv.status}
+                      </p>
+                    </div>
+                    <p className="font-semibold tabular">{formatBRL(open)}</p>
+                    <Link href="/cartoes" className="text-xs text-[var(--primary)] font-medium hover:underline">
+                      Pagar em Cartões
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
@@ -39,7 +83,7 @@ export default async function CalendarioPage() {
               <CardTitle className="inline-flex items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-[var(--primary)]" /> Próximos vencimentos
               </CardTitle>
-              <CardDescription>{upcoming.length} despesa(s) pendente(s) ou vencida(s)</CardDescription>
+              <CardDescription>Despesas pendentes no ciclo financeiro atual</CardDescription>
             </div>
           </CardHeader>
           <CardContent>

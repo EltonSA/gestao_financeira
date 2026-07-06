@@ -18,6 +18,16 @@ export const couples = pgTable("couples", {
   name: text("name").notNull(),
   person1Label: text("person1_label").notNull().default("Pessoa 1"),
   person2Label: text("person2_label").notNull().default("Pessoa 2"),
+  /** fixed_day | business_day */
+  financialCycleStartType: text("financial_cycle_start_type")
+    .notNull()
+    .default("fixed_day"),
+  /** 1–31 quando fixed_day */
+  financialCycleStartDay: integer("financial_cycle_start_day").notNull().default(1),
+  /** ex.: 5 = 5º dia útil quando business_day */
+  financialCycleBusinessDayNumber: integer("financial_cycle_business_day_number")
+    .notNull()
+    .default(5),
   createdAt: ts(),
 });
 
@@ -131,6 +141,40 @@ export const cards = pgTable(
   (t) => [index("cards_couple_idx").on(t.coupleId)]
 );
 
+/** Fatura do cartão de crédito por ciclo de fechamento. */
+export const cardInvoices = pgTable(
+  "card_invoices",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    cardId: text("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    coupleId: text("couple_id")
+      .notNull()
+      .references(() => couples.id, { onDelete: "cascade" }),
+    cycleStartDate: text("cycle_start_date").notNull(),
+    cycleEndDate: text("cycle_end_date").notNull(),
+    closingDate: text("closing_date").notNull(),
+    dueDate: text("due_date").notNull(),
+    totalAmountCents: integer("total_amount_cents").notNull().default(0),
+    paidAmountCents: integer("paid_amount_cents").notNull().default(0),
+    /** open | closed | partial_paid | paid | overdue */
+    status: text("status").notNull().default("open"),
+    paidAt: text("paid_at"),
+    /** pix, transfer, debit, etc. */
+    paymentMethod: text("payment_method"),
+    createdAt: ts(),
+    updatedAt: tsUpdated(),
+  },
+  (t) => [
+    index("card_invoices_couple_idx").on(t.coupleId),
+    index("card_invoices_card_idx").on(t.cardId),
+    index("card_invoices_cycle_idx").on(t.cardId, t.cycleStartDate),
+  ]
+);
+
 export const categories = pgTable("categories", {
   id: text("id")
     .primaryKey()
@@ -225,6 +269,9 @@ export const expenses = pgTable(
     installmentIndex: integer("installment_index"),
     installmentTotal: integer("installment_total"),
     installmentGroupId: text("installment_group_id"),
+    cardInvoiceId: text("card_invoice_id").references(() => cardInvoices.id, {
+      onDelete: "set null",
+    }),
     createdByUserId: text("created_by_user_id")
       .notNull()
       .references(() => users.id),
@@ -324,6 +371,7 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
 export type User = typeof users.$inferSelect;
 export type Couple = typeof couples.$inferSelect;
 export type Card = typeof cards.$inferSelect;
+export type CardInvoice = typeof cardInvoices.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type RecurringExpense = typeof recurringExpenses.$inferSelect;

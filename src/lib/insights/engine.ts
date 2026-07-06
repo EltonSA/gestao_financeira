@@ -4,8 +4,18 @@ import { db, schema } from "@/lib/db";
 import { getEffectiveStatus } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getAllCardsUsage } from "@/lib/services/cardLimit";
+import { getRealBalanceCents } from "@/lib/services/realBalance";
 import { cardSupportsCredit } from "@/lib/cardKind";
-import { endOfMonth, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
+import { startOfDay, subDays } from "date-fns";
+import {
+  getFinancialCycleForDate,
+  getPreviousFinancialCycle,
+  dayOfCycle,
+  daysInCycle,
+  ymdFromDate,
+  type FinancialCycleSettings,
+  type FinancialCycleRange,
+} from "@/lib/financial-cycle";
 
 export type Insight = {
   id: string;
@@ -14,35 +24,26 @@ export type Insight = {
   severity: "info" | "success" | "warning" | "danger";
 };
 
-function ymNow() {
-  const d = new Date();
-  return { y: d.getFullYear(), m: d.getMonth() + 1 };
-}
-
-function rangeMonth(y: number, m: number) {
-  const start = startOfMonth(new Date(y, m - 1, 1));
-  const end = endOfMonth(new Date(y, m - 1, 1));
-  return { start, end, startIso: ymdToIsoDate(start), endIso: ymdToIsoDate(end) };
-}
-
 function ymdToIsoDate(d: Date) {
-  const y = d.getFullYear();
-  const mo = d.getMonth() + 1;
-  const day = d.getDate();
-  return `${y}-${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return ymdFromDate(d);
 }
 
-export async function runInsights(coupleId: string): Promise<Insight[]> {
-  const { y, m } = ymNow();
-  const { startIso, endIso } = rangeMonth(y, m);
+export async function runInsights(
+  coupleId: string,
+  settings: FinancialCycleSettings,
+  cycle?: FinancialCycleRange
+): Promise<Insight[]> {
+  const now = new Date();
+  const finCycle = cycle ?? getFinancialCycleForDate(now, settings);
+  const startIso = finCycle.startDate;
+  const endIso = finCycle.endDate;
   const out: Insight[] = [];
   let n = 0;
   const id = (t: string) => `ins-${++n}-${t}`;
 
-  const prev = subMonths(new Date(y, m - 1, 1), 1);
-  const py = prev.getFullYear();
-  const pm = prev.getMonth() + 1;
-  const pRange = rangeMonth(py, pm);
+  const prevCycle = getPreviousFinancialCycle(finCycle, settings);
+  const pStart = prevCycle.startDate;
+  const pEnd = prevCycle.endDate;
   const today = new Date();
   const todayStr = ymdToIsoDate(today);
   const d7 = subDays(startOfDay(today), 6);
@@ -107,7 +108,7 @@ export async function runInsights(coupleId: string): Promise<Insight[]> {
   out.push({
     id: id("m"),
     type: "mes",
-    message: `Este mês: ${formatBRL(monthPaid.reduce((a, b) => a + b.amountCents, 0))} pago, ${formatBRL(monthPending.reduce((a, b) => a + b.amountCents, 0))} pendente${monthOver.length ? `, ${formatBRL(monthOver.reduce((a, b) => a + b.amountCents, 0))} vencido` : ""}.`,
+    message: `Ciclo ${finCycle.label}: ${formatBRL(monthPaid.reduce((a, b) => a + b.amountCents, 0))} pago, ${formatBRL(monthPending.reduce((a, b) => a + b.amountCents, 0))} pendente${monthOver.length ? `, ${formatBRL(monthOver.reduce((a, b) => a + b.amountCents, 0))} vencido` : ""}.`,
     severity: "info",
   });
 
@@ -117,7 +118,7 @@ export async function runInsights(coupleId: string): Promise<Insight[]> {
     .where(
       and(
         eq(schema.expenses.coupleId, coupleId),
-        between(schema.expenses.dueDate, pRange.startIso, pRange.endIso),
+        between(schema.expenses.dueDate, pStart, pEnd),
         inArray(schema.expenses.status, ["pending", "paid", "overdue"] as const)
       )
     );
@@ -131,7 +132,7 @@ export async function runInsights(coupleId: string): Promise<Insight[]> {
       out.push({
         id: id("comp"),
         type: "comparativo",
-        message: `Pagamentos confirmados: ${Math.abs(Math.round(diff))}% ${diff > 0 ? "a mais" : "a menos"} em relação ao mês passado (mesma janela).`,
+        message: `Pagamentos confirmados: ${Math.abs(Math.round(diff))}% ${diff > 0 ? "a mais" : "a menos"} em relação ao ciclo anterior.`,
         severity: diff > 0 ? "warning" : "success",
       });
     }
@@ -153,7 +154,7 @@ export async function runInsights(coupleId: string): Promise<Insight[]> {
     out.push({
       id: id("topcat"),
       type: "categoria",
-      message: `A categoria com maior movimento no mês é ${idToName[top[0]] ?? "—"} (${formatBRL(top[1])}).`,
+      message: `A categoria com maior movimento no ciclo é ${idToName[top[0]] ?? "—"} (${formatBRL(top[1])}).`,
       severity: "info",
     });
   }
@@ -207,16 +208,26 @@ export async function runInsights(coupleId: string): Promise<Insight[]> {
     });
   }
 
-  const dayOfMonth = today.getDate();
-  if (dayOfMonth > 0) {
-    const avg = cSum / dayOfMonth;
-    const lastDay = endOfMonth(today).getDate();
-    const proj = (cSum / dayOfMonth) * lastDay;
+  const realBal = await getRealBalanceCents(coupleId);
+  if (realBal !== 0) {
+    out.push({
+      id: id("saldo"),
+      type: "saldo_real",
+      message: `Saldo real disponível: ${formatBRL(realBal)} (entradas menos despesas e faturas pagas).`,
+      severity: realBal < 0 ? "danger" : "success",
+    });
+  }
+
+  const dom = dayOfCycle(today, finCycle);
+  const lastDay = daysInCycle(finCycle);
+  if (dom > 0) {
+    const avg = cSum / dom;
+    const proj = (cSum / dom) * lastDay;
     if (cSum > 0) {
       out.push({
         id: id("md"),
         type: "media",
-        message: `A média de pagos por dia (mês) está cerca de ${formatBRL(Math.round(avg))}; projeção até o fim do mês: cerca de ${formatBRL(Math.round(proj))}.`,
+        message: `Média de pagos por dia no ciclo: ~${formatBRL(Math.round(avg))}; projeção até o fim do ciclo: ~${formatBRL(Math.round(proj))}.`,
         severity: "info",
       });
     }

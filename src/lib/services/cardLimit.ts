@@ -3,7 +3,8 @@ import { and, eq, inArray, sum } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { cardAlertLevel, usagePercent } from "@/lib/metrics";
 
-const ACTIVE = ["pending", "paid", "overdue"] as const;
+/** Compras no crédito em aberto — só pendente/vencido (fatura não paga). */
+const OPEN_CREDIT = ["pending", "overdue"] as const;
 
 export { usagePercent, cardAlertLevel };
 
@@ -19,7 +20,7 @@ export async function getCardUsedCents(
         eq(schema.expenses.coupleId, coupleId),
         eq(schema.expenses.cardId, cardId),
         eq(schema.expenses.paymentMethod, "credit"),
-        inArray(schema.expenses.status, [...ACTIVE] as unknown as string[])
+        inArray(schema.expenses.status, [...OPEN_CREDIT] as unknown as string[])
       )
     );
   const v = row?.s;

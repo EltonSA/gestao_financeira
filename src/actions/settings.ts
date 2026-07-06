@@ -15,6 +15,34 @@ const coupleS = z.object({
   person2Label: z.string().min(1),
 });
 
+const financialCycleS = z.object({
+  financialCycleStartType: z.enum(["fixed_day", "business_day"]),
+  financialCycleStartDay: z.coerce.number().int().min(1).max(31),
+  financialCycleBusinessDayNumber: z.coerce.number().int().min(1).max(23),
+});
+
+export async function updateFinancialCycleAction(formData: FormData) {
+  const s = await requireAdultAuth();
+  const r = financialCycleS.safeParse({
+    financialCycleStartType: formData.get("financialCycleStartType"),
+    financialCycleStartDay: formData.get("financialCycleStartDay"),
+    financialCycleBusinessDayNumber: formData.get("financialCycleBusinessDayNumber"),
+  });
+  if (!r.success) redirect("/configuracoes?cycle=err");
+  await db
+    .update(schema.couples)
+    .set({
+      financialCycleStartType: r.data.financialCycleStartType,
+      financialCycleStartDay: r.data.financialCycleStartDay,
+      financialCycleBusinessDayNumber: r.data.financialCycleBusinessDayNumber,
+    })
+    .where(eq(schema.couples.id, s.user.coupleId));
+  revalidatePath("/configuracoes");
+  revalidatePath("/");
+  revalidatePath("/relatorios");
+  redirect("/configuracoes?cycle=ok");
+}
+
 export async function updateCoupleAction(formData: FormData) {
   const s = await requireAdultAuth();
   const r = coupleS.safeParse({

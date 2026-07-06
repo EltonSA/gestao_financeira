@@ -1,7 +1,9 @@
 import { getSession } from "@/lib/auth/session";
 import { getCardWalletSummaries } from "@/lib/services/cardWallet";
+import { getRealBalanceBreakdown } from "@/lib/services/realBalance";
 import { cardSupportsCredit } from "@/lib/cardKind";
 import { formatBRL } from "@/lib/money";
+import { formatDateBRFromISO } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus, CreditCard as CreditCardIcon, AlertTriangle, Pencil } from "lucide-react";
@@ -10,18 +12,23 @@ import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { WalletCard } from "@/components/cards/wallet-card";
+import { PayInvoiceDialog } from "@/components/cards/pay-invoice-dialog";
+import { Badge } from "@/components/ui/badge";
 
 export default async function CartoesPage() {
   const s = await getSession();
   if (!s) redirect("/login");
-  const rows = await getCardWalletSummaries(s.user.coupleId);
+  const [rows, balance] = await Promise.all([
+    getCardWalletSummaries(s.user.coupleId),
+    getRealBalanceBreakdown(s.user.coupleId),
+  ]);
   const totLimit = rows.reduce(
     (acc, r) => acc + (cardSupportsCredit(r.card.cardKind) ? r.creditLimitCents : 0),
     0
   );
   const totUsed = rows.reduce((acc, r) => acc + r.creditUsedCents, 0);
-  const totAvail = rows.reduce((acc, r) => acc + r.effectiveCreditAvailableCents, 0);
-  const totDebitUsed = rows.reduce((acc, r) => acc + r.debitUsedOnCardCents, 0);
+  const totAvail = rows.reduce((acc, r) => acc + r.creditAvailableCents, 0);
+  const totInvoice = rows.reduce((acc, r) => acc + r.currentInvoiceCents, 0);
   const ownerLabel = (o: string) =>
     o === "shared"
       ? "Compartilhado"
@@ -35,7 +42,7 @@ export default async function CartoesPage() {
       <PageHeader
         eyebrow="Carteira"
         title="Cartões"
-        description="Crédito (limite e fatura), débito (gastos na função) e entradas vinculadas ao cartão."
+        description="Linha de crédito e faturas separadas do saldo real da família."
         action={
           <Button asChild leftIcon={<Plus className="h-4 w-4" />}>
             <Link href="/cartoes/novo">Novo cartão</Link>
@@ -43,13 +50,33 @@ export default async function CartoesPage() {
         }
       />
 
+      <Card>
+        <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.1em] text-[var(--foreground-muted)]">
+              Saldo real disponível
+            </p>
+            <p className="text-2xl font-semibold tabular text-[var(--foreground)] mt-1">
+              {formatBRL(balance.realBalanceCents)}
+            </p>
+            <p className="text-xs text-[var(--foreground-muted)] mt-1">
+              Entradas {formatBRL(balance.totalIncomesCents)} − saídas pagas{" "}
+              {formatBRL(balance.paidNonCreditExpensesCents)}
+            </p>
+          </div>
+          <p className="text-xs text-[var(--foreground-muted)] max-w-sm">
+            O limite do cartão não entra no saldo. Compras no crédito aumentam a fatura; ao pagá-la, o saldo real é reduzido.
+          </p>
+        </CardContent>
+      </Card>
+
       {rows.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <SummaryStat label="Cartões" value={String(rows.length).padStart(2, "0")} />
           <SummaryStat label="Limite crédito" value={formatBRL(totLimit)} />
-          <SummaryStat label="Fatura crédito" value={formatBRL(totUsed)} tone="warning" />
-          <SummaryStat label="Disp. crédito" value={formatBRL(totAvail)} tone="success" />
-          <SummaryStat label="Gasto débito" value={formatBRL(totDebitUsed)} />
+          <SummaryStat label="Fatura em aberto" value={formatBRL(totUsed)} tone="warning" />
+          <SummaryStat label="Limite disponível" value={formatBRL(totAvail)} tone="success" />
+          <SummaryStat label="Fatura do ciclo" value={formatBRL(totInvoice)} />
         </div>
       )}
 
@@ -64,7 +91,7 @@ export default async function CartoesPage() {
                 {alerts.length} cartão(ões) com uso elevado
               </p>
               <p className="text-xs text-[var(--warning-strong)]/80 mt-0.5">
-                Alertas em 70%, 85% e 95% do limite. Reduza compras parceladas para os próximos meses.
+                Alertas em 70%, 85% e 95% do limite de crédito.
               </p>
             </div>
           </CardContent>
@@ -75,7 +102,7 @@ export default async function CartoesPage() {
         <EmptyState
           icon={<CreditCardIcon className="h-5 w-5" />}
           title="Nenhum cartão cadastrado"
-          description="Adicione o primeiro cartão para acompanhar limite usado e disponível em tempo real."
+          description="Adicione cartões para acompanhar limite, fatura e pagamentos."
           action={
             <Button asChild leftIcon={<Plus className="h-4 w-4" />}>
               <Link href="/cartoes/novo">Cadastrar cartão</Link>
@@ -83,35 +110,50 @@ export default async function CartoesPage() {
           }
         />
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+        <div className="space-y-5">
           {rows.map((r) => (
-            <div key={r.card.id} className="group relative">
-              <Link
-                href={`/cartoes/${r.card.id}/editar`}
-                aria-label={`Editar ${r.card.name}`}
-                className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 rounded-2xl"
-              >
-                <WalletCard
-                  name={r.card.name}
-                  institution={r.card.institution}
-                  ownerLabel={ownerLabel(r.card.owner)}
-                  used={r.creditUsedCents}
-                  limit={r.creditLimitCents}
-                  available={r.effectiveCreditAvailableCents}
-                  percent={r.percent}
-                  cardKind={r.card.cardKind}
-                  debitUsedCents={r.debitUsedOnCardCents}
-                  incomeOnCardCents={r.incomeOnCardCents}
-                  liquidAfterDebitCents={r.liquidAfterDebitCents}
-                />
-              </Link>
-              {/* Quick edit chip — visível ao hover */}
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 backdrop-blur px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/30">
-                  <Pencil className="h-3 w-3" />
-                  Editar
-                </span>
+            <div key={r.card.id} className="space-y-3">
+              <div className="group relative max-w-md">
+                <Link
+                  href={`/cartoes/${r.card.id}/editar`}
+                  aria-label={`Editar ${r.card.name}`}
+                  className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 rounded-2xl"
+                >
+                  <WalletCard
+                    name={r.card.name}
+                    institution={r.card.institution}
+                    ownerLabel={ownerLabel(r.card.owner)}
+                    used={r.creditUsedCents}
+                    limit={r.creditLimitCents}
+                    available={r.creditAvailableCents}
+                    percent={r.percent}
+                    cardKind={r.card.cardKind}
+                    debitUsedCents={r.debitUsedOnCardCents}
+                    currentInvoiceCents={r.currentInvoiceCents}
+                    invoiceDueDate={r.currentInvoiceDueDate}
+                  />
+                </Link>
+                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 backdrop-blur px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/30">
+                    <Pencil className="h-3 w-3" />
+                    Editar
+                  </span>
+                </div>
               </div>
+              {r.currentInvoiceId && r.currentInvoiceOutstandingCents > 0 && (
+                <div className="flex flex-wrap items-center gap-3 pl-1">
+                  <Badge variant="warning">
+                    Fatura {formatBRL(r.currentInvoiceOutstandingCents)} em aberto
+                    {r.currentInvoiceDueDate && ` · vence ${formatDateBRFromISO(r.currentInvoiceDueDate)}`}
+                  </Badge>
+                  <PayInvoiceDialog
+                    invoiceId={r.currentInvoiceId}
+                    cardName={r.card.name}
+                    outstandingCents={r.currentInvoiceOutstandingCents}
+                    dueDate={r.currentInvoiceDueDate}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -26,12 +26,21 @@ export default async function RelatoriosPage() {
       <PageHeader
         eyebrow="Análise"
         title="Relatórios"
-        description="Resumo do mês corrente. Mais filtros e exportações em breve."
+        description={`Ciclo ${d.financialCycle.label} (${d.financialCycle.startDate} a ${d.financialCycle.endDate}).`}
       />
+
+      <Card className="p-5 border-[var(--success)]/20">
+        <p className="caption uppercase tracking-[0.1em]">Saldo real disponível</p>
+        <p className="text-2xl font-semibold tabular mt-1">{formatBRL(d.realBalance.realBalanceCents)}</p>
+        <p className="text-xs text-[var(--foreground-muted)] mt-2">
+          Entradas no ciclo: {formatBRL(d.kpi.cycleIncomes)} · Fatura cartão em aberto:{" "}
+          {formatBRL(d.walletAgg.creditUsed)}
+        </p>
+      </Card>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <BigStat
-          label="Pago no mês"
+          label="Pago no ciclo"
           value={formatBRL(d.kpi.month)}
           icon={<Wallet className="h-4 w-4" />}
           tone="primary"
@@ -49,7 +58,7 @@ export default async function RelatoriosPage() {
           tone={d.kpi.monthOver > 0 ? "danger" : "neutral"}
         />
         <BigStat
-          label="vs mês anterior"
+          label="vs ciclo anterior"
           value={`${positive ? "−" : "+"}${Math.abs(delta).toFixed(1)}%`}
           icon={positive ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
           tone={positive ? "success" : "warning"}
@@ -115,7 +124,7 @@ export default async function RelatoriosPage() {
               <TrendingUp className="h-4 w-4" />
             </div>
             <div>
-              <p className="caption uppercase tracking-[0.1em]">Projeção do mês</p>
+              <p className="caption uppercase tracking-[0.1em]">Projeção do ciclo</p>
               <p className="text-base font-semibold tabular">~ {formatBRL(Math.round(d.projection.proj))}</p>
             </div>
           </div>

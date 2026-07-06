@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth/session";
-import { updateCoupleAction } from "@/actions/settings";
+import { updateCoupleAction, updateFinancialCycleAction } from "@/actions/settings";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { CheckCircle2, Heart, Baby } from "lucide-react";
 
 export default async function ConfigPage({
   searchParams,
-}: { searchParams: Promise<{ child?: string; filhoConvite?: string; filhoConta?: string }> }) {
+}: { searchParams: Promise<{ child?: string; filhoConvite?: string; filhoConta?: string; cycle?: string }> }) {
   const sp = await searchParams;
   const s = await getSession();
   if (!s) redirect("/login");
@@ -179,6 +179,60 @@ export default async function ConfigPage({
                 Salvar alterações
               </Button>
             </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6 space-y-5">
+          <div>
+            <h3 className="text-base font-semibold tracking-tight">Ciclo financeiro</h3>
+            <p className="text-xs text-[var(--foreground-muted)] mt-1">
+              Define quando começa o período para dashboard, relatórios e insights (ex.: 5º dia útil do mês).
+            </p>
+          </div>
+          {sp.cycle === "ok" && (
+            <p className="text-sm text-[var(--success-strong)]">Ciclo financeiro salvo.</p>
+          )}
+          {sp.cycle === "err" && (
+            <p className="text-sm text-[var(--danger-strong)]">Verifique os valores e tente novamente.</p>
+          )}
+          <form action={updateFinancialCycleAction} className="space-y-4">
+            <Field label="Tipo de início">
+              <select
+                name="financialCycleStartType"
+                defaultValue={c.financialCycleStartType}
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              >
+                <option value="fixed_day">Dia fixo do mês</option>
+                <option value="business_day">Dia útil do mês</option>
+              </select>
+            </Field>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Dia fixo (1–31)" hint="Quando tipo = dia fixo">
+                <Input
+                  name="financialCycleStartDay"
+                  type="number"
+                  min={1}
+                  max={31}
+                  defaultValue={c.financialCycleStartDay}
+                  required
+                />
+              </Field>
+              <Field label="Nº dia útil" hint="Ex.: 5 = 5º dia útil (seg–sex)">
+                <Input
+                  name="financialCycleBusinessDayNumber"
+                  type="number"
+                  min={1}
+                  max={23}
+                  defaultValue={c.financialCycleBusinessDayNumber}
+                  required
+                />
+              </Field>
+            </div>
+            <Button type="submit" block>
+              Salvar ciclo financeiro
+            </Button>
           </form>
         </CardContent>
       </Card>

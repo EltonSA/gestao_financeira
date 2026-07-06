@@ -5,7 +5,7 @@ import { db, schema } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/getCouple";
 import { isChildAccount, responsibleTagForChildUser } from "@/lib/auth/member";
 import { assertResponsibleBelongsToCouple } from "@/lib/data/children";
-import { parseDateBR } from "@/lib/dates";
+import { parseDateBR, firstInstallmentDueDate, parseDayOfMonthInput } from "@/lib/dates";
 import { parseMoneyToCents } from "@/lib/money";
 import { createRecurringIncomeTemplate } from "@/lib/services/recurringIncomeSync";
 import { revalidatePath } from "next/cache";
@@ -15,11 +15,12 @@ const incomeForm = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   amount: z.string().min(1),
-  receivedDate: z.string().min(1),
+  receivedDate: z.string().optional(),
   cardId: z.string().optional(),
   responsible: z.string().min(1),
   incomeType: z.enum(["single", "recurring", "installment"]),
   installments: z.coerce.number().int().min(1).max(60).optional(),
+  receivedDayOfMonth: z.coerce.number().int().min(1).max(31).optional(),
 });
 
 async function validateCard(coupleId: string, cardId?: string) {
@@ -48,6 +49,7 @@ export async function createIncomeAction(formData: FormData) {
     responsible: formData.get("responsible"),
     incomeType: formData.get("incomeType") ?? "single",
     installments: formData.get("installments") || 1,
+    receivedDayOfMonth: formData.get("receivedDayOfMonth") || undefined,
   });
   if (!r.success) return { error: "Dados inválidos" };
   const d = r.data;
@@ -58,18 +60,35 @@ export async function createIncomeAction(formData: FormData) {
   } else if (!(await assertResponsibleBelongsToCouple(s.user.coupleId, d.responsible))) {
     return { error: "Responsável inválido" };
   }
-  const received = parseDateBR(d.receivedDate);
-  if (!received) return { error: "Data inválida (use DD/MM/AAAA)" };
+
+  const inst =
+    d.incomeType === "installment"
+      ? Math.max(2, d.installments && d.installments > 1 ? d.installments : 2)
+      : 1;
+
+  let received: string | null;
+  if (d.incomeType === "installment") {
+    const day =
+      d.receivedDayOfMonth ??
+      parseDayOfMonthInput(String(formData.get("receivedDayOfMonth") ?? "")) ??
+      parseDayOfMonthInput(d.receivedDate);
+    if (!day) {
+      return {
+        error: "Selecione o recebimento das parcelas (Todo dia 01, 02, 03…)",
+      };
+    }
+    received = firstInstallmentDueDate(day);
+  } else {
+    received = parseDateBR(d.receivedDate ?? "");
+    if (!received) return { error: "Data inválida (use DD/MM/AAAA)" };
+  }
+
   const amountCents = parseMoneyToCents(d.amount);
   if (amountCents <= 0) return { error: "Informe o valor" };
 
   const cardErr = await validateCard(s.user.coupleId, d.cardId);
   if (cardErr) return { error: cardErr };
 
-  const inst =
-    d.incomeType === "installment" && d.installments && d.installments > 1
-      ? d.installments
-      : 1;
   const group = inst > 1 ? crypto.randomUUID() : null;
 
   let recurringTemplateId: string | null = null;
@@ -157,7 +176,7 @@ export async function updateIncomeAction(id: string, formData: FormData) {
   if (!childTag && !(await assertResponsibleBelongsToCouple(s.user.coupleId, d.responsible))) {
     return { error: "Responsável inválido" };
   }
-  const received = parseDateBR(d.receivedDate);
+  const received = parseDateBR(d.receivedDate ?? "");
   if (!received) return { error: "Data inválida" };
   const amountCents = parseMoneyToCents(d.amount);
   if (amountCents <= 0) return { error: "Informe o valor" };

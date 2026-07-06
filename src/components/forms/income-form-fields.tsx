@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { CalendarDays, DollarSign, Tag } from "lucide-react";
 import { childResponsibleValue } from "@/lib/responsible";
+import { firstInstallmentDueDate, formatDateBRFromISO } from "@/lib/dates";
+import { MONTH_DAY_OPTIONS, monthDayLabel } from "@/lib/month-day";
 
 const INS: Record<string, string> = {
   nubank: "Nubank",
@@ -29,6 +31,7 @@ export type IncomeFormDefaults = Partial<{
   description: string;
   amount: string;
   receivedDate: string;
+  receivedDayOfMonth: string;
   cardId: string;
   responsible: string;
   incomeType: string;
@@ -39,13 +42,32 @@ export function IncomeFormFields({
   ctx,
   defaults,
   showClassification = true,
+  mode = "create",
 }: {
   ctx: IncomeFormCtx;
   defaults?: IncomeFormDefaults;
   showClassification?: boolean;
+  mode?: "create" | "edit";
 }) {
   const d = defaults ?? {};
   const [incomeType, setIncomeType] = useState(d.incomeType ?? "single");
+  const [installments, setInstallments] = useState(Number(d.installments ?? 2) || 2);
+  const [receivedDay, setReceivedDay] = useState(d.receivedDayOfMonth ?? "5");
+
+  const isInstallmentPlan = mode === "create" && incomeType === "installment";
+
+  const handleIncomeTypeChange = (value: string) => {
+    setIncomeType(value);
+    if (value === "installment" && installments < 2) {
+      setInstallments(2);
+    }
+  };
+
+  const firstParcelPreview = useMemo(() => {
+    const day = Number(receivedDay);
+    if (!isInstallmentPlan || day < 1 || day > 31) return null;
+    return formatDateBRFromISO(firstInstallmentDueDate(day));
+  }, [isInstallmentPlan, receivedDay]);
 
   return (
     <div className="space-y-6">
@@ -73,8 +95,53 @@ export function IncomeFormFields({
             defaultValue={d.description}
           />
         </Field>
+
+        {showClassification && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field
+              label="Tipo"
+              hint={
+                incomeType === "recurring"
+                  ? "Cria um modelo e repete todo mês no mesmo dia"
+                  : incomeType === "installment"
+                    ? "Divide o valor em parcelas mensais"
+                    : undefined
+              }
+            >
+              <Select
+                name="incomeType"
+                required
+                value={incomeType}
+                onChange={(e) => handleIncomeTypeChange(e.target.value)}
+              >
+                <option value="single">Única</option>
+                <option value="recurring">Recorrente mensal</option>
+                <option value="installment">Parcelada</option>
+              </Select>
+            </Field>
+            {incomeType === "installment" ? (
+              <Field label="Parcelas" hint="Mínimo 2">
+                <Input
+                  name="installments"
+                  type="number"
+                  min={2}
+                  max={60}
+                  required
+                  value={installments}
+                  onChange={(e) => setInstallments(Math.max(2, Number(e.target.value) || 2))}
+                />
+              </Field>
+            ) : (
+              <div aria-hidden className="hidden sm:block" />
+            )}
+          </div>
+        )}
+
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Valor (R$)">
+          <Field
+            label="Valor (R$)"
+            hint={isInstallmentPlan ? "Valor total — dividido entre as parcelas" : undefined}
+          >
             <Input
               name="amount"
               required
@@ -84,15 +151,39 @@ export function IncomeFormFields({
               leftIcon={<DollarSign className="h-4 w-4" />}
             />
           </Field>
-          <Field label="Data do recebimento" hint="DD/MM/AAAA">
-            <Input
-              name="receivedDate"
-              required
-              placeholder="01/01/2026"
-              defaultValue={d.receivedDate}
-              leftIcon={<CalendarDays className="h-4 w-4" />}
-            />
-          </Field>
+          {isInstallmentPlan ? (
+            <Field
+              label="Recebimento das parcelas"
+              hint={
+                firstParcelPreview
+                  ? `${monthDayLabel(Number(receivedDay))} · 1ª em ${firstParcelPreview}, depois todo mês no mesmo dia`
+                  : "Cada parcela cai no mesmo dia de cada mês"
+              }
+            >
+              <Select
+                name="receivedDayOfMonth"
+                required
+                value={receivedDay}
+                onChange={(e) => setReceivedDay(e.target.value)}
+              >
+                {MONTH_DAY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : (
+            <Field label="Data do recebimento" hint="DD/MM/AAAA">
+              <Input
+                name="receivedDate"
+                required
+                placeholder="01/01/2026"
+                defaultValue={d.receivedDate}
+                leftIcon={<CalendarDays className="h-4 w-4" />}
+              />
+            </Field>
+          )}
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <Field
@@ -131,52 +222,6 @@ export function IncomeFormFields({
           )}
         </div>
       </div>
-
-      {showClassification && (
-        <div className="space-y-4">
-          <div className="border-b border-[var(--border-subtle)] pb-2">
-            <h3 className="text-sm font-semibold tracking-tight text-[var(--foreground)]">Tipo de recebimento</h3>
-            <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
-              Única, mensal recorrente ou parcelada em vários meses.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field
-              label="Tipo"
-              hint={
-                incomeType === "recurring"
-                  ? "Cria um modelo e repete todo mês no mesmo dia"
-                  : incomeType === "installment"
-                    ? "Divide o valor em parcelas mensais"
-                    : undefined
-              }
-            >
-              <Select
-                name="incomeType"
-                required
-                value={incomeType}
-                onChange={(e) => setIncomeType(e.target.value)}
-              >
-                <option value="single">Única</option>
-                <option value="recurring">Recorrente mensal</option>
-                <option value="installment">Parcelada</option>
-              </Select>
-            </Field>
-            {incomeType === "installment" && (
-              <Field label="Parcelas" hint="Máximo 60">
-                <Input
-                  name="installments"
-                  type="number"
-                  min={2}
-                  max={60}
-                  required
-                  defaultValue={d.installments ?? "2"}
-                />
-              </Field>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

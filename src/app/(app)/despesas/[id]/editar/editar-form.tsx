@@ -54,7 +54,7 @@ export function EditarDespesaForm({
         </div>
       )}
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7 shadow-[var(--shadow-xs)]">
-        <ExpenseFormFields ctx={ctx} defaults={initial} />
+        <ExpenseFormFields ctx={ctx} defaults={initial} mode="edit" />
       </div>
       <div className="flex flex-col-reverse sm:flex-row gap-3">
         <Button asChild variant="ghost" className="flex-1">
