@@ -3,8 +3,12 @@ import { and, eq, inArray, sum } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { cardAlertLevel, usagePercent } from "@/lib/metrics";
 
-/** Compras no crédito em aberto — só pendente/vencido (fatura não paga). */
-const OPEN_CREDIT = ["pending", "overdue"] as const;
+/**
+ * Compras no crédito que contam para o limite/fatura — tudo que não foi cancelado.
+ * "Pago" aqui significa "paguei com o cartão" (virou dívida na fatura), não que a
+ * fatura já foi quitada — isso é controlado à parte em `cardInvoices`.
+ */
+const OPEN_CREDIT = ["pending", "paid", "overdue"] as const;
 
 export { usagePercent, cardAlertLevel };
 
