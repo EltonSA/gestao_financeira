@@ -37,14 +37,13 @@ export function WalletCard({
   debitUsedCents = 0,
   cardIncomeCents = 0,
   cardCashBalanceCents = 0,
-  currentInvoiceCents = 0,
   invoiceDueDate,
   className,
 }: {
   name: string;
   institution: string;
   ownerLabel: string;
-  /** Crédito em aberto (fatura não quitada). */
+  /** Total em aberto no crédito — inclui parcelas de meses futuros. */
   used: number;
   limit: number;
   /** Limite disponível no cartão (não é saldo do casal). */
@@ -57,7 +56,7 @@ export function WalletCard({
   cardIncomeCents?: number;
   /** Entrou − gasto em débito. */
   cardCashBalanceCents?: number;
-  currentInvoiceCents?: number;
+  /** Vencimento do ciclo de fatura atual. */
   invoiceDueDate?: string | null;
   className?: string;
 }) {
@@ -118,7 +117,7 @@ export function WalletCard({
                 <div className="min-w-0 text-right">
                   <p className="text-[10px] uppercase tracking-[0.16em] text-white/60">Fatura atual</p>
                   <p className="mt-0.5 text-[20px] sm:text-[22px] font-semibold tabular tracking-tight">
-                    {formatBRL(currentInvoiceCents)}
+                    {formatBRL(used)}
                   </p>
                 </div>
               </div>
@@ -132,7 +131,7 @@ export function WalletCard({
                 />
               </div>
               <p className="text-[10px] tabular text-white/65">
-                Gasto no crédito {formatBRL(used)} / Limite {formatBRL(limit)}
+                Limite {formatBRL(limit)}
                 {invoiceDueDate && (
                   <> · Vence {formatDateBRFromISO(invoiceDueDate)}</>
                 )}

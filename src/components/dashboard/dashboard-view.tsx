@@ -110,7 +110,6 @@ export type DProps = {
     available: number;
     percent: number;
     debitUsedOnCard: number;
-    currentInvoice: number;
     invoiceOutstanding: number;
   }[];
   totLimit: number;
@@ -675,10 +674,6 @@ export function DashboardView(p: DProps) {
                       <dt className="text-[var(--foreground-muted)]">Limite disponível</dt>
                       <dd className="tabular font-medium text-[var(--foreground)]">{formatBRL(row.available)}</dd>
                     </div>
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-[var(--foreground-muted)]">Fatura atual</dt>
-                      <dd className="tabular font-medium text-[var(--foreground)]">{formatBRL(row.currentInvoice)}</dd>
-                    </div>
                     {row.debitUsedOnCard > 0 && (
                       <div className="flex justify-between gap-2">
                         <dt className="text-[var(--foreground-muted)]">Gasto no débito</dt>
@@ -686,7 +681,7 @@ export function DashboardView(p: DProps) {
                       </div>
                     )}
                     <div className="flex justify-between gap-2 pt-1.5 border-t border-[var(--border-subtle)] items-baseline">
-                      <dt className="text-[var(--foreground-muted)] font-medium">Em aberto</dt>
+                      <dt className="text-[var(--foreground-muted)] font-medium">Fatura atual</dt>
                       <dd className="tabular font-semibold text-[var(--warning-strong)] text-sm">{formatBRL(row.used)}</dd>
                     </div>
                   </dl>

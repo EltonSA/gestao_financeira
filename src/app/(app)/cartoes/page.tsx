@@ -170,7 +170,6 @@ export default async function CartoesPage() {
                           debitUsedCents={r.debitUsedOnCardCents}
                           cardIncomeCents={r.cardIncomeCents}
                           cardCashBalanceCents={r.cardCashBalanceCents}
-                          currentInvoiceCents={r.currentInvoiceCents}
                           invoiceDueDate={r.currentInvoiceDueDate}
                         />
                       </Link>

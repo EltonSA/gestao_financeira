@@ -39,7 +39,6 @@ export default async function DashboardPage({
     available: w.creditAvailableCents,
     percent: w.percent,
     debitUsedOnCard: w.debitUsedOnCardCents,
-    currentInvoice: w.currentInvoiceCents,
     invoiceOutstanding: w.currentInvoiceOutstandingCents,
   }));
   return (
