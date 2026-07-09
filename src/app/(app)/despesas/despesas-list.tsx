@@ -2,17 +2,20 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatBRL } from "@/lib/money";
 import { formatDateBRFromISO } from "@/lib/dates";
 import { labelForResponsible, childResponsibleValue } from "@/lib/responsible";
 import { canMarkExpenseAsPaid, MarkPaidDialog } from "@/components/expenses/mark-paid-button";
+import { deleteExpenseAction } from "@/actions/expenses";
 import { Badge, STATUS_BADGE } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
-import { Edit3, Filter, Search, ListChecks } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Edit3, Filter, Search, ListChecks, Trash2 } from "lucide-react";
 
 export type ExpenseRow = {
   id: string;
@@ -48,6 +51,7 @@ export function DespesasList({
   ctx: ListCtx;
   cycleLabel?: string;
 }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<FilterStatus>("all");
   const [categoryId, setCategoryId] = useState<string>("");
@@ -211,6 +215,20 @@ export function DespesasList({
                               <Edit3 className="h-4 w-4" />
                             </Link>
                           </Button>
+                          <ConfirmDialog
+                            trigger={
+                              <Button type="button" size="icon-sm" variant="ghost" title="Excluir" className="text-[var(--danger)]">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            }
+                            title="Excluir esta despesa?"
+                            description="A ação não pode ser desfeita."
+                            confirmLabel="Excluir"
+                            onConfirm={async () => {
+                              await deleteExpenseAction(e.id);
+                              router.refresh();
+                            }}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -246,20 +264,36 @@ export function DespesasList({
                       </div>
                     </div>
                   </Link>
-                  {canMarkExpenseAsPaid(e.status) && (
-                    <MarkPaidDialog
-                      expenseId={e.id}
-                      title={e.title}
-                      amountCents={e.amountCents}
-                      dueDate={e.dueDate}
-                      defaultPaymentMethod={e.paymentMethod}
-                      defaultCardId={e.cardId}
-                      cards={ctx.cards}
-                      showLabel={false}
-                      size="icon-sm"
-                      variant="soft"
+                  <div className="flex flex-col items-center gap-1.5 shrink-0">
+                    {canMarkExpenseAsPaid(e.status) && (
+                      <MarkPaidDialog
+                        expenseId={e.id}
+                        title={e.title}
+                        amountCents={e.amountCents}
+                        dueDate={e.dueDate}
+                        defaultPaymentMethod={e.paymentMethod}
+                        defaultCardId={e.cardId}
+                        cards={ctx.cards}
+                        showLabel={false}
+                        size="icon-sm"
+                        variant="soft"
+                      />
+                    )}
+                    <ConfirmDialog
+                      trigger={
+                        <Button type="button" size="icon-sm" variant="ghost" title="Excluir" className="text-[var(--danger)]">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      }
+                      title="Excluir esta despesa?"
+                      description="A ação não pode ser desfeita."
+                      confirmLabel="Excluir"
+                      onConfirm={async () => {
+                        await deleteExpenseAction(e.id);
+                        router.refresh();
+                      }}
                     />
-                  )}
+                  </div>
                 </li>
               );
             })}
