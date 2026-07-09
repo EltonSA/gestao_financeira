@@ -35,6 +35,8 @@ export function WalletCard({
   percent,
   cardKind = "credit",
   debitUsedCents = 0,
+  cardIncomeCents = 0,
+  cardCashBalanceCents = 0,
   currentInvoiceCents = 0,
   invoiceDueDate,
   className,
@@ -49,7 +51,12 @@ export function WalletCard({
   available: number;
   percent: number;
   cardKind?: string;
+  /** Gasto no débito (dinheiro em conta) do cartão. */
   debitUsedCents?: number;
+  /** Dinheiro (entradas) creditado nesse cartão. */
+  cardIncomeCents?: number;
+  /** Entrou − gasto em débito. */
+  cardCashBalanceCents?: number;
   currentInvoiceCents?: number;
   invoiceDueDate?: string | null;
   className?: string;
@@ -57,12 +64,13 @@ export function WalletCard({
   const grad = GRAD_BY_INSTITUTION[institution] ?? "bg-grad-indigo";
   const trackCredit = cardSupportsCredit(cardKind) && limit > 0;
   const showDebitBlock = cardSupportsDebit(cardKind);
+  const showBoth = trackCredit && showDebitBlock;
   return (
     <div
       className={cn(
         "card-noise relative overflow-hidden rounded-2xl text-white",
         "shadow-[var(--shadow-lg)] min-h-[200px]",
-        showDebitBlock ? "min-h-[240px]" : "aspect-[1.586/1] min-h-[180px]",
+        showBoth ? "min-h-[320px]" : showDebitBlock ? "min-h-[240px]" : "aspect-[1.586/1] min-h-[180px]",
         "transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-xl)]",
         grad,
         className
@@ -72,14 +80,19 @@ export function WalletCard({
       <div aria-hidden className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-white/5 blur-2xl" />
 
       <div className="relative z-[1] flex h-full flex-col p-5">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
               {INST_LABEL[institution] ?? institution}
             </p>
-            <p className="mt-1 text-base font-semibold tracking-tight">{name}</p>
+            <p className="mt-1 text-base font-semibold tracking-tight truncate">{name}</p>
           </div>
-          <Wifi className="h-5 w-5 text-white/80 rotate-90" aria-hidden />
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <span className="inline-flex items-center rounded-full bg-black/20 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-white/90 backdrop-blur-sm">
+              {ownerLabel}
+            </span>
+            <Wifi className="h-5 w-5 text-white/70 rotate-90" aria-hidden />
+          </div>
         </div>
 
         <div className="mt-3 flex items-center gap-2">
@@ -89,9 +102,12 @@ export function WalletCard({
           </p>
         </div>
 
-        <div className="mt-auto space-y-2">
-          {trackCredit ? (
-            <>
+        <div className="mt-auto space-y-3">
+          {trackCredit && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+                Crédito
+              </p>
               <div className="grid grid-cols-2 gap-3 items-end">
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-[0.16em] text-white/60">Limite disponível</p>
@@ -106,9 +122,8 @@ export function WalletCard({
                   </p>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2 text-[10px] text-white/55">
-                <span className="truncate">{ownerLabel}</span>
-                <span className="tabular shrink-0">{percent}% do limite</span>
+              <div className="flex items-center justify-end text-[10px] text-white/55">
+                <span className="tabular">{percent}% do limite</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/15">
                 <div
@@ -117,33 +132,43 @@ export function WalletCard({
                 />
               </div>
               <p className="text-[10px] tabular text-white/65">
-                Em aberto {formatBRL(used)} / Limite {formatBRL(limit)}
+                Gasto no crédito {formatBRL(used)} / Limite {formatBRL(limit)}
                 {invoiceDueDate && (
                   <> · Vence {formatDateBRFromISO(invoiceDueDate)}</>
                 )}
               </p>
-            </>
-          ) : showDebitBlock ? (
-            <>
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-white/60">Gasto no débito</p>
-                <p className="mt-0.5 text-[20px] sm:text-[22px] font-semibold tabular tracking-tight">
-                  {formatBRL(debitUsedCents)}
-                </p>
-              </div>
-              <p className="text-[10px] text-white/55 truncate">{ownerLabel}</p>
-            </>
-          ) : (
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-white/60">{ownerLabel}</p>
-              <p className="text-sm font-medium text-white/90">Sem limite de crédito cadastrado.</p>
             </div>
           )}
 
-          {showDebitBlock && trackCredit && (
-            <p className="text-[10px] tabular text-white/65 pt-1">
-              Débito no cartão: {formatBRL(debitUsedCents)}
-            </p>
+          {showBoth && <div className="border-t border-white/15" />}
+
+          {showDebitBlock && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+                Dinheiro em conta
+              </p>
+              <div className="grid grid-cols-2 gap-3 items-end">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-white/60">Entrou</p>
+                  <p className="mt-0.5 text-[20px] sm:text-[22px] font-semibold tabular tracking-tight truncate">
+                    {formatBRL(cardIncomeCents)}
+                  </p>
+                </div>
+                <div className="min-w-0 text-right">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-white/60">Gasto no débito</p>
+                  <p className="mt-0.5 text-[20px] sm:text-[22px] font-semibold tabular tracking-tight">
+                    {formatBRL(debitUsedCents)}
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] tabular text-white/65">
+                Saldo em conta: {formatBRL(cardCashBalanceCents)}
+              </p>
+            </div>
+          )}
+
+          {!trackCredit && !showDebitBlock && (
+            <p className="text-sm font-medium text-white/90">Sem limite de crédito cadastrado.</p>
           )}
         </div>
       </div>

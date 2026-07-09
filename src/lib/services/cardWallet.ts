@@ -9,6 +9,18 @@ import { getCurrentInvoiceForCard } from "@/lib/services/cardInvoice";
 
 const DEBIT_ACTIVE = ["pending", "paid", "overdue"] as const;
 
+export async function getCardIncomeCents(
+  coupleId: string,
+  cardId: string
+): Promise<number> {
+  const [row] = await db
+    .select({ s: sum(schema.incomes.amountCents) })
+    .from(schema.incomes)
+    .where(and(eq(schema.incomes.coupleId, coupleId), eq(schema.incomes.cardId, cardId)));
+  const v = row?.s;
+  return v == null ? 0 : Number(v);
+}
+
 export async function getDebitUsedOnCardCents(
   coupleId: string,
   cardId: string
@@ -31,6 +43,10 @@ export async function getDebitUsedOnCardCents(
 export type CardWalletSummary = {
   card: typeof schema.cards.$inferSelect;
   debitUsedOnCardCents: number;
+  /** Entradas (dinheiro) creditadas nesse cartão. */
+  cardIncomeCents: number;
+  /** Entradas − gasto em débito: saldo em dinheiro que sobrou no cartão. */
+  cardCashBalanceCents: number;
   /** Compras no crédito ainda em aberto (fatura não quitada). */
   creditUsedCents: number;
   creditLimitCents: number;
@@ -59,6 +75,7 @@ export async function getCardWalletSummaries(
   const out: CardWalletSummary[] = [];
   for (const card of cards) {
     const debitUsed = await getDebitUsedOnCardCents(coupleId, card.id);
+    const cardIncome = await getCardIncomeCents(coupleId, card.id);
     const creditUsed = await getCardUsedCents(coupleId, card.id);
     const limit = cardSupportsCredit(card.cardKind) ? card.limitTotalCents : 0;
     const creditAvail = Math.max(0, limit - creditUsed);
@@ -75,6 +92,8 @@ export async function getCardWalletSummaries(
     out.push({
       card,
       debitUsedOnCardCents: debitUsed,
+      cardIncomeCents: cardIncome,
+      cardCashBalanceCents: cardIncome - debitUsed,
       creditUsedCents: creditUsed,
       creditLimitCents: limit,
       creditAvailableCents: creditAvail,
